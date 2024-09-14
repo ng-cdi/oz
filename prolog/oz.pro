@@ -6,28 +6,31 @@
 :- use_module(library(uuid)).
 :- use_module(library(increval)).
 :- use_module(library(clpfd)).
+:- use_module(library(random)).
 :- use_module(library(prolog_stack)).
-:- debug.
-%:- create_prolog_flag(backtrace,            true, [type(boolean), keep(true)]).
-%:- create_prolog_flag(backtrace_depth,      20,   [type(integer), keep(true)]).
-%:- create_prolog_flag(backtrace_goal_depth, 3,    [type(integer), keep(true)]).
-%:- create_prolog_flag(backtrace_show_lines, true, [type(boolean), keep(true)]).
-%:- use_module(library(thread)).
-
-%:- set_prolog_flag(stack_limit, 4_294_967_296).
-:- set_prolog_flag(stack_limit, 80_294_967_296).
+%:- debug.
+:- set_prolog_flag(stack_limit, 4_294_967_296).
+%:- set_prolog_flag(stack_limit, 80_294_967_296).
 
 :- rdf_register_prefix(kpi, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/intent/kpi#').
-:- rdf_register_prefix(cat, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/examples/tmf_example/service#').
+%:- rdf_register_prefix(cat, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/examples/tmf_example/service#').
+:- rdf_register_prefix(cat, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/services/free5gc#').
 :- rdf_register_prefix(im, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/intent/intent#').
 :- rdf_register_prefix(icm, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/intent/icm#').
 :- rdf_register_prefix(in, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/examples/tmf_example/customer_intent#').
-:- rdf_register_prefix(sv, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/examples/tmf_example/service#').
+%:- rdf_register_prefix(sv, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/examples/tmf_example/service#').
+:- rdf_register_prefix(sv, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/services/free5gc#').
 :- rdf_register_prefix(nm, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/network#').
 :- rdf_register_prefix(ln, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/examples/tmf_example/live_network#').
 :- rdf_register_prefix(example, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/examples/tmf_example/simple#').
 :- rdf_register_prefix(bt, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/examples/infrastructure/bt#').
 :- rdf_register_prefix(cn, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/examples/infrastructure/core-network#').
+
+%:- rdf_register_prefix(cn, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/examples/infrastructure/21CN#').
+
+:- rdf_register_prefix(fg, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/5g#').
+:- rdf_register_prefix(freeg, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/examples/5g/free5gc#').
+
 :- rdf_register_prefix(time, 'http://www.w3c.org/2006/time#').
 :- rdf_register_prefix(wd, 'http://wikidata.org/entity/').
 :- use_module('prolog/util.pro').
@@ -35,8 +38,6 @@
 :- use_module('prolog/intent.pro').
 :- use_module('prolog/test.pro').
 
-%:- dynamic([constraintHost/1], [incremental(true)]).
-%:- dynamic([constraintHop/1], [incremental(true)]).
 :- dynamic constraintHost/1.
 :- dynamic constraintHop/1.
 :- dynamic constraint/2.
@@ -70,6 +71,11 @@ make_live([Functor, Arg1]) :-
 make_live([Functor, Arg1, Arg2]) :-
 	rdf(Arg1, _, _, 'live_network'),
 	call(Functor, Arg1, Arg2).
+
+arnold(S, P, O) :-
+	S = 'Put That',
+	P = 'Cookie',
+	O = 'Down'.
 /*
 intent(Pred) :-
 	Pred =.. List,
@@ -130,6 +136,16 @@ initial_deploy([Device|Devices], Host) :-
 		initial_deploy([Device|Devices], Next)
 	).
 
+
+create_slice(SliceName, GNodeB) :-
+	create_slice(SliceName, 0, 2, "10.61.0.0./24", GNodeB).
+
+create_slice(Name, SST, SSNAI, IP, GNodeB) :-
+	rdf_assert(Name, rdf:type, nm:'NetworkSlice'),
+	rdf_assert(Name, nm:hasSST, SST),
+	rdf_assert(Name, nm:hasSD, SSNAI),
+	rdf_assert(Name, nm:hasSubnet, IP),
+	rdf_assert(Name, nm:servingGNB, GNodeB).
 
 %%%%%%%%% Optimal Run %%%%%%%%%
 solve_optimal :-
@@ -964,3 +980,324 @@ add_constraint(Functor, Args, ADD) :-
 	explode(Functor, Body, Args),
 	retractall(Clause),
 	asserta((Clause :- Body, ADD)).
+
+% 5G Stuff
+
+hopsFromNearestMachine(Thing, Hops) :-
+	network:shortest_network_path(Thing, Machine, Route),
+	sliceCapacityMachine(Machine),
+	route_hops(Route, Hops).
+
+route_stats(Route) :-
+	route_hops(Route, Count),
+	write("Hops: "),
+	writeln(Count),
+	route_capacity(Route, Free),
+	write("Min Capacity: "),
+	writeln(Free).
+
+
+route_capacity([], Total) :-
+	Total is 10000000000.
+route_capacity([H|T], Total) :-
+	wire(H),
+	route_capacity(T, RFree),
+	network:free_bandwidth(H, Free),
+	(
+		Free < RFree ->
+		Total = Free; 
+		Total = RFree
+	).
+
+route_capacity([_|T], Total) :-
+	route_capacity([_|T], Total).
+
+
+route_hops([], Count) :-
+	Count is 0.
+route_hops([H|T], Count) :-
+	(
+		metroSwitch(H);
+		coreSwitch(H)
+	),
+	route_hops(T, NewCount),
+	Count is NewCount+1.
+route_hops([_|T], Count) :-
+	route_hops(T, Count).
+
+
+route_fitness([]).
+route_fitness([[PM, R]|T]) :-
+	write("Machine: "),
+	writeln(PM),
+	write("Min BW: "),
+	route_capacity(R, MBW),
+	writeln(MBW),
+	write("Hops: "),
+	route_hops(R, Hops),
+	writeln(Hops),
+	route_fitness(T).
+
+
+%route_score(R, Score) :-
+%	route_hops(R, Hops),
+%	route_capacity(R, Cap),
+%	writeln(Hops),
+%	CapScore is Cap / 1000000000,
+%	writeln(CapScore),
+%	MixedScore is Hops - CapScore*2,
+%	Score is 100 - MixedScore.	
+%
+route_score(R, Score) :-
+	route_hops(R, Hops),
+	route_capacity(R, Cap),
+	%writeln(Hops),
+	CapScore is Cap / 1000000000,
+	%writeln(CapScore),
+	MixedScore is Hops*10 - CapScore*50,
+	random(0, 100, Random),
+	Score is Random * MixedScore.
+
+validate_route([]).
+validate_route([H|T]) :-
+	wire(H),
+	network:free_bandwidth(H, Free),
+	Free > 100000000,
+	validate_route(T).
+validate_route([H|T]) :-
+	\+ wire(H),
+	validate_route(T).
+
+
+select_route([[PM, R]|T], FinalM, FinalR) :-
+	select_route(T, PM, R, FinalM, FinalR).
+
+select_route([], PM, R, FinalM, FinalR) :-
+	FinalM = PM,
+	FinalR = R.
+
+select_route([[PM, R]|T], SelectedM, SelectedR, FinalM, FinalR) :-
+	%route_capacity(R, MWB),
+	%route_hops(R, Hops),
+	%route_capacity(SelectedR, SelectedMWB),
+	%route_hops(SelectedR, SelectedHops),
+	route_score(SelectedR, SelectedScore),
+	route_score(R, Score),
+	%writeln(Score),
+	(
+		%MWB < SelectedMWB,
+		%Hops < SelectedHops ->
+		Score > SelectedScore ->
+		select_route(T, PM, R, FinalM, FinalR);
+		select_route(T, SelectedM, SelectedR, FinalM, FinalR)
+	).
+
+
+status :-
+	status(TotDeps, CoreDeps, SCMs, MLs),
+	writeln("*** Status ***"),
+	write("Total Deployments: "),
+	writeln(TotDeps),
+	write("Core Deployments: "),
+	writeln(CoreDeps),
+	write("Free Machines: "),
+	writeln(SCMs),
+	write("Maxed Links: "),
+	writeln(MLs).
+
+status(TotDeps, CoreDeps, SCMs, MLs) :-
+	aggregate_all(count, deploymentUnit(DU), TotDeps),
+	aggregate_all(count, (
+		deploymentUnit(DU),
+		isRunningOn(DU, PM),
+		physicalMachine(PM),
+		physicalLink(W, PM),
+		wire(W),
+		physicalLink(W, CS),
+		coreSwitch(CS)
+	), CoreDeps),
+	aggregate_all(count, sliceCapacityMachine(PM), SCMs),
+	aggregate_all(count, (
+		wire(W),
+		network:free_bandwidth(W, Free),
+		\+ Free > 0
+	), MLs).
+
+
+add_slice(GNodeB) :-
+	uuid(Slice),
+	create_slice(Slice, GNodeB),
+	% Find nearest physical machine
+	findnsols(8,
+		[NM, R],
+		(
+			network:shortest_network_path(GNodeB, NM, R),
+			validate_route(R),
+			sliceCapacityMachine(NM)
+		),
+		L
+	),
+	%route_fitness(L),
+	%network:shortest_network_path(GNodeB, NearestMachine, Route),
+	select_route(L, NearestMachine, Route),
+	%sliceCapacityMachine(NearestMachine),
+	%route_stats(Route),
+	%writeln(NearestMachine),
+	%writeln(Route),
+	% if valid deploy smf and upf and 
+	deploy_slice_pair(NearestMachine, Slice),
+	% claim path from machine to GNodeB
+	% What is amount? - Wire has 10000000000 
+	% How many do we want? - currently should support 100
+	transaction(
+		network:claim_bandwidth_route(Route, Slice, 100000000)
+	).
+	%(
+		%route_hops(Route, Hops),
+		%Hops > 1 ->
+		%writeln("\t********** This one has more hops ***********"),
+		%write("Hops: "),
+		%writeln(Hops);
+		%true
+	%).
+	%rdf_transaction(
+	%deploy_slice_pair(NearestMachine, Slice),
+	%	transaction(
+	%      network:claim_bandwidth_route(Route, Slice, 100000000)
+	%   )
+	%).
+
+
+sliceCapacityMachine(Machine) :-
+	physicalMachine(Machine),
+	network:requestVCPUCapacity(Machine, 1),
+	network:requestMemoryCapacity(Machine, 10000000000),
+	network:requestStorageCapacity(Machine, 10000000000).
+
+
+sliceFulfillmentMachine(Machine, GNodeB) :-
+	physicalMachine(Machine),
+	rdf(DepU, nm:isRunningOn, Machine),
+	rdf(DepU, nm:serviceSlice, Slice),
+	rdf(Slice, nm:servingGNB, GNodeB).
+	
+sliceFulfillmentMachine(GNodeB, Machine) :-
+	gNodeB(GNodeB),
+	rdf(Slice, nm:servingGNB, GNodeB),
+	rdf(DepU, nm:serviceSlice, Slice),
+	rdf(DepU, nm:isRunningOn, Machine),
+	physicalMachine(Machine).
+
+
+deploy_slice_pair(Machine, Slice) :-
+	deploy_slice_vdu("SMF", Machine, Slice),
+	deploy_slice_vdu("UPF", Machine, Slice).
+
+
+deploy_slice_vdu(Name, Machine, Slice) :-
+	uuid(ID),
+	format(atom(VM), "~a_~a", [Name, ID]),
+	format(atom(VMINTF), "~a-eth0", [VM]),
+	rdf_assert(VM, rdf:type, owl:'NamedIndividual'),
+	rdf_assert(VM, rdf:type, nm:'DeploymentUnit'),
+	rdf_assert(VM, nm:isRunningOn, Machine),
+	rdf_assert(VM, nm:cpuUtilization, "0"^^xsd:string),
+	rdf_assert(VM, nm:vcpuUtilization, 1^^xsd:integer),
+	rdf_assert(VM, nm:memoryUtilization, 1000000000),
+	rdf_assert(VM, nm:storageUtilization, 1000000000),
+	rdf_assert(VM, nm:serviceSlice, Slice),
+	rdf_assert(VM, nm:hasInterface, VMINTF).
+
+nearestPhysicalMachine(X, Y) :-
+	gNodeB(X),
+	physicalConnection(X, MS),
+	metroSwitch(MS),
+	physicalConnection(MS, PM),
+	physicalMachine(PM).
+
+nearestTest(X, Y) :-
+	gNodeB(X),
+	physicalConnection(X, Y),
+	physicalMachine(Y).
+
+:- table physicalConnection/2.
+physicalConnection(X, Y) :-
+	physicalLink(W, X),
+	wire(W),
+	physicalLink(W, Y),
+	X \= Y;
+	physicalConnection(X, B),
+	X \= B,
+	physicalConnection(B, Y),
+	B \= Y,
+	X \= Y.
+
+:- table physicalConnection/4.
+physicalConnection(X, Y, Count, Tally) :-
+	physicalLink(W, X),
+	wire(W),
+	physicalLink(W, Y),
+	X \= Y,
+	Tally is Count+1;
+	physicalConnection(X, B, Count+1, Tally),
+	X \= B,
+	physicalConnection(B, Y, Count, Tally),
+	B \= Y,
+	X \= Y.
+
+networkConnection(X, Y) :-
+	physicalDevice(X),
+	demoNetworkPath(X, Y),
+	physicalDevice(Y).
+
+% Either shortest possible path
+% OR 
+% shortest possible path with a 
+% shorted possible path inside?
+demoNetworkPath(X, Y) :-
+	physicalLink(W, X),
+	wire(W),
+	physicalLink(W, Y);
+	demoNetworkPath(X, S),
+	metroSwitch(S),
+	demoNetworkPath(S, Y).
+
+demo(Stream) :-
+	get_time(Start),
+	demo,
+	get_time(Finish),
+	Duration is Finish-Start,
+	status(TotDeps, CoreDeps, SCMs, MLs),
+	csv_write_stream(Stream, [row(Duration, TotDeps, CoreDeps, SCMs, MLs)],[]).
+
+demo :-
+	findall(GNodeB, (
+		gNodeB(GNodeB)
+	), Gs),
+	slice_demo(Gs).
+
+slice_demo([]).
+slice_demo([H|T]) :-
+	%writeln(H),
+	get_time(Start),
+	add_slice(H),
+	get_time(Time),
+	Duration is Time-Start,
+	%writeln(Duration),
+	slice_demo(T).
+
+create_csv :-
+	open('5g.csv', append, Stream),
+	csv_write_stream(Stream, [row('Duration', 'Total Deployments', 'Core Deployments', 'Machine Capacity', 'Maxed Links')], []),
+	close(Stream).
+
+five_demo :-
+	open('5g.csv', append, Stream),
+	demo(Stream),
+	demo(Stream),
+	demo(Stream),
+	demo(Stream),
+	demo(Stream),
+	demo(Stream),
+	demo(Stream),
+	close(Stream).

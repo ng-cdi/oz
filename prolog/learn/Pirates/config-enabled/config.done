@@ -1,0 +1,11 @@
+/* Generated file
+   Keep track of installed config files
+*/
+
+file('config.pl','/home/paul/projects/oz/prolog/ClioPatria/config-available',1676508025).
+file('store.pl','/home/paul/projects/oz/prolog/ClioPatria/config-available',1676508025).
+file('network.pl','/home/paul/projects/oz/prolog/ClioPatria/config-available',1676508025).
+file('zlib.pl','/home/paul/projects/oz/prolog/ClioPatria/config-available',1676508025).
+file('pengines.pl','/home/paul/projects/oz/prolog/ClioPatria/config-available',1676508025).
+file('localhost.pl','/home/paul/projects/oz/prolog/ClioPatria/config-available',1676508025).
+file('pirates.pl','cpack/pirates/config-available',1676508078).

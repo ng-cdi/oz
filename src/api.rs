@@ -1,5 +1,5 @@
-use std::{fs::File, io::{BufWriter, Write}, sync::RwLock};
-use std::time::{Duration, Instant};
+use std::{fs::File, io::BufWriter, sync::RwLock};
+use std::time::Instant;
 use actix_web::{App, HttpResponse, HttpServer, Responder, HttpRequest, web};
 use actix_web::{get, post, patch, delete};
 use actix_web::web::Data;
@@ -23,6 +23,10 @@ async fn validate(data: Data<RwLock<AppState>>) -> impl Responder {
     info!("Api: Validate");
     let data = data.read().unwrap();
     let start = Instant::now();
+    /*
+    let de = prolog::DomainExpert::new();
+    de.load_prolog_all();
+    */
     let results = prolog::validate_intent(&data);
     let mut real_results: Vec<IntentStatus> = Vec::new();
     for i in results.iter() {
@@ -51,7 +55,7 @@ async fn deploy_network(data: Data<RwLock<AppState>>) -> impl Responder {
     println!("{}", pretty_json);
 
     let f = File::create("./res/last_osm.yaml").unwrap();
-    let mut bw = BufWriter::new(f);
+    let _bw = BufWriter::new(f);
     
     //bw.write_all(pretty_json.as_bytes());
 
@@ -110,29 +114,29 @@ async fn list_intent(data: Data<RwLock<AppState>>) -> impl Responder {
 }
 
 #[post("/intent")]
-async fn create_intent(data: Data<RwLock<AppState>>, req: HttpRequest) -> impl Responder {
+async fn create_intent(_data: Data<RwLock<AppState>>, _req: HttpRequest) -> impl Responder {
     // TODO: Ensure intent validity
         
     HttpResponse::Ok().body("Ok")
 }
 
 #[get("/intent/{id}")]
-async fn get_intent(data: Data<RwLock<AppState>>, path: actix_web::web::Path<String>) -> impl Responder {
-    let id = path.into_inner();
+async fn get_intent(_data: Data<RwLock<AppState>>, path: actix_web::web::Path<String>) -> impl Responder {
+    let _id = path.into_inner();
     
     HttpResponse::Ok().body("Ok")
 }
 
 #[patch("/intent/{id}")]
-async fn patch_intent(data: Data<RwLock<AppState>>, path: actix_web::web::Path<String>) -> impl Responder {
-    let id = path.into_inner();
+async fn patch_intent(_data: Data<RwLock<AppState>>, path: actix_web::web::Path<String>) -> impl Responder {
+    let _id = path.into_inner();
     
     HttpResponse::Ok().body("Ok")
 }
 
 #[delete("/intent/{id}")]
-async fn delete_intent(data: Data<RwLock<AppState>>, path: actix_web::web::Path<String>) -> impl Responder {
-    let id = path.into_inner();
+async fn delete_intent(_data: Data<RwLock<AppState>>, path: actix_web::web::Path<String>) -> impl Responder {
+    let _id = path.into_inner();
     
     HttpResponse::Ok().body("Ok")
 }

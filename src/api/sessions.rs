@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 use std::sync::RwLock;
 
-use actix::{Recipient, Message, Context, Actor, Addr};
-use log::{info, warn};
+use actix::{Recipient, Addr};
+use log::{warn};
 use uuid::Uuid;
 
 use crate::common::IntentStatus;
@@ -17,7 +17,7 @@ pub struct SessionManager {
 }
 
 impl SessionManager {
-    fn send_update(&self, status: &IntentStatus, dest_id: &Uuid) {
+    fn send_update(&self, _status: &IntentStatus, dest_id: &Uuid) {
         if let Some(dest_socket) = self.sessions.read().unwrap().get(dest_id) {
             let _ = dest_socket;
         } else {

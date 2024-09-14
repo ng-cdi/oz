@@ -1,6 +1,8 @@
 use lazy_static::lazy_static;
 use log::{info, debug};
 use osm::nsd::NSD;
+use oxigraph::sparql::QueryResults;
+use oxigraph::store::Store;
 use regex::Regex;
 use serde_json::{Value, Map};
 use sophia::term::Term as STerm;
@@ -14,6 +16,129 @@ use super::common;
 use super::common::Triple;
 
 mod ontology;
+
+pub struct DomainExpert {
+    engine: Engine,
+}
+
+impl DomainExpert {
+
+    pub fn new() -> DomainExpert {
+        DomainExpert {
+            engine: Engine::new(),
+        }
+    }
+
+    fn activate(&self) -> Context<ActivatedEngine> {
+        let activation = self.engine.activate();
+        let ctx: Context<_> = activation.into();
+
+        ctx
+    } 
+
+    pub fn clear(&mut self) {
+        self.engine = Engine::new();
+    }
+
+    pub fn load_prolog_all(&self) {
+        let ctx = self.activate();
+        let _load = ctx.call_once(pred!{consult/1}, [&term!{ctx: "./prolog/oz.pro"}.unwrap()]).unwrap();
+        let _on = ctx.call_once(pred!{consult/1}, [&term!{ctx: "./prolog/ont_network.pro"}.unwrap()]).unwrap();
+        let _oi = ctx.call_once(pred!{consult/1}, [&term!{ctx: "./prolog/ont_intent.pro"}.unwrap()]).unwrap();
+        ctx.call_once(pred!{test/0}, []).unwrap();
+    }
+
+    pub fn insert_store(&self, store: Store, graph_name: &str) {
+        let ctx = self.activate();
+
+        let query = "SELECT * WHERE { ?s ?p ?o }";
+       
+        if let Ok(QueryResults::Solutions(mut solutions)) = store.query(query) {
+            while let Some(solution) = solutions.next() {
+                match solution {
+                    Ok(sol) => {
+                        let s = ctx.new_term_ref();
+                        let p = ctx.new_term_ref();
+                        let o = ctx.new_term_ref();
+                        let g = ctx.new_term_ref();
+
+                        let st_s = sol.get("s").unwrap().to_string();
+                        let st_p = sol.get("p").unwrap().to_string();
+                        let st_o = sol.get("o").unwrap().to_string();
+
+                        debug!("Insert Data S: {:?}", st_s);
+                        s.unify(Atom::new(&st_s)).unwrap();
+                        p.unify(Atom::new(&st_p)).unwrap();
+                        o.unify(Atom::new(&st_o)).unwrap();
+                        g.unify(Atom::new(&graph_name)).unwrap();
+
+                        let query = rdf_assert(&ctx, &s, &p, &o, &g);
+                        let res = query.once();
+                        match res {
+                            Ok(..) => debug!("Yahoo!"),
+                            Err(err) => debug!("Assert Query: {:?}", err.source()),
+                        }
+                    },
+                    Err(_err) => return,
+                }
+            }
+        }
+    }
+
+    pub fn insert_data(&self, triples: &Vec<Triple>, graph_name: &str) {
+        /* It's working don't question it...
+        * When frame is called 'frame' it doesn't work...
+        * Seems like 'shadowing' the variable works...
+        * No idea why tho...
+        * To try:
+        * 1. Using the same terms, but clearing and iterating
+        * 2. Discard only the references not the frame
+        * 3. Use anonymous references
+        */ 
+        let ctx = self.activate();
+        for t in triples.iter() {
+            let ctx = ctx.open_frame();
+            let s = ctx.new_term_ref();
+            let p = ctx.new_term_ref();
+            let o = ctx.new_term_ref();
+            let g = ctx.new_term_ref();
+            debug!("Insert Data S: {:?}", t.s);
+            s.unify(Atom::new(&t.s)).unwrap();
+            p.unify(Atom::new(&t.p)).unwrap();
+            o.unify(Atom::new(&t.o)).unwrap();
+            g.unify(Atom::new(&graph_name)).unwrap();
+            let query = rdf_assert(&ctx, &s, &p, &o, &g);
+            let res = query.once();
+            match res {
+                Ok(..) => debug!("Yahoo!"),
+                Err(err) => debug!("Assert Query: {:?}", err.source()),
+            }
+            ctx.discard();
+        }
+    }
+
+    pub fn get_context(&self) -> Context<ActivatedEngine> {
+        self.activate()
+    }
+
+    //pub fn query_extract<const N: usize>(&self, pred: CallablePredicate<N>) -> Vec<Vec<Value>> {
+    pub fn query_extract<const N: usize>(&self, ctx: Context<ActivatedEngine>, pred: CallablePredicate<N>) -> Vec<Vec<Value>> {
+        //let ctx = self.activate();
+        let mut owner_vec: Vec<Term> = Vec::new();
+        let borrow_vec: Vec<&Term>;
+        let term_list: [&Term; N];
+        for _ in 0..N {
+            let v = ctx.new_term_ref();
+            owner_vec.push(v);
+        }
+        borrow_vec = owner_vec.iter().collect();    
+        term_list = borrow_vec.try_into().unwrap();
+
+        let query = ctx.open(pred, term_list);
+        let triples = extract_all_auto(&query, term_list);
+        triples
+    }
+}
 
 // Prolog Functions
 prolog! {
@@ -94,19 +219,18 @@ pub fn load_prolog<'a>(engine: &'a Engine) -> Context<'a, ActivatedEngine<'a>> {
 /// Activate a prolog engine and load ./prolog/oz.pro
 pub fn load_prolog_oz<'a>(engine: &'a Engine) -> Context<'a, ActivatedEngine<'a>> {
     let ctx = load_prolog(engine);
-    let load = ctx.call_once(pred!{consult/1}, [&term!{ctx: "./prolog/oz.pro"}.unwrap()]).unwrap();
-    let on = ctx.call_once(pred!{consult/1}, [&term!{ctx: "./prolog/ont_network.pro"}.unwrap()]).unwrap();
-    let oi = ctx.call_once(pred!{consult/1}, [&term!{ctx: "./prolog/ont_intent.pro"}.unwrap()]).unwrap();
-    //ctx.call_once(pred!{test/0}, []).unwrap();
+    let _load = ctx.call_once(pred!{consult/1}, [&term!{ctx: "./prolog/oz.pro"}.unwrap()]).unwrap();
+    let _on = ctx.call_once(pred!{consult/1}, [&term!{ctx: "./prolog/ont_network.pro"}.unwrap()]).unwrap();
+    let _oi = ctx.call_once(pred!{consult/1}, [&term!{ctx: "./prolog/ont_intent.pro"}.unwrap()]).unwrap();
 
     ctx
 }
 
 pub fn load_prolog_all<'a>(engine: &'a Engine) -> Context<'a, ActivatedEngine<'a>> {
     let ctx = load_prolog(engine);
-    let load = ctx.call_once(pred!{consult/1}, [&term!{ctx: "./prolog/oz.pro"}.unwrap()]).unwrap();
-    let on = ctx.call_once(pred!{consult/1}, [&term!{ctx: "./prolog/ont_network.pro"}.unwrap()]).unwrap();
-    let oi = ctx.call_once(pred!{consult/1}, [&term!{ctx: "./prolog/ont_intent.pro"}.unwrap()]).unwrap();
+    let _load = ctx.call_once(pred!{consult/1}, [&term!{ctx: "./prolog/oz.pro"}.unwrap()]).unwrap();
+    let _on = ctx.call_once(pred!{consult/1}, [&term!{ctx: "./prolog/ont_network.pro"}.unwrap()]).unwrap();
+    let _oi = ctx.call_once(pred!{consult/1}, [&term!{ctx: "./prolog/ont_intent.pro"}.unwrap()]).unwrap();
     ctx.call_once(pred!{test/0}, []).unwrap();
 
     ctx
@@ -145,6 +269,39 @@ pub fn insert_data<'a>(ctx: &Context<'a, ActivatedEngine<'a>>, triples: &Vec<Tri
     }
 }
 
+fn extract_all_auto<const N: usize>(query: &Context<impl OpenCall>, terms: [&Term; N]) -> Vec<Vec<Value>> {
+    let mut result: Vec<Vec<Value>> = Vec::new();
+    let mut next = true;
+    while next == true {
+        match query.next_solution() {
+            Ok(ok) => {
+                debug!("Next: {}", ok);
+                next = ok;
+                let mut res: Vec<Value> = Vec::new();
+                let ctx = query.open_frame();
+                for i in 0..terms.len() {
+                    println!("{:?}", terms[i]);
+                    let ttj = term_to_json(&ctx, terms[i]);
+                    debug!("{ttj:?}");
+                    res.push(ttj);
+                }
+                result.push(res);
+            },
+            Err(err) => {
+                debug!("Next: {}", err);
+                next = false;
+                if err.is_exception() {
+                    debug!("EXCEPTION");
+                } else if err.is_failure() {
+                    debug!("FAILURE");
+                }
+            },
+        }
+    }
+
+    result
+}
+
 fn extract_all<'a>(query: &Context<impl OpenCall>, terms: Vec<&Term>) -> Vec<Vec<Value>> {
     let mut result: Vec<Vec<Value>> = Vec::new();
     let mut next = true;
@@ -178,7 +335,7 @@ fn extract_all<'a>(query: &Context<impl OpenCall>, terms: Vec<&Term>) -> Vec<Vec
 }
 
 /// Extract a Vec<Triple> from a prolog query
-fn extract_triples<'a>(query: &Context<impl OpenCall>, s: &Term, p: &Term, o: &Term) -> Vec<Triple> {
+pub fn extract_triples<'a>(query: &Context<impl OpenCall>, s: &Term, p: &Term, o: &Term) -> Vec<Triple> {
     debug!("EXTRACT TRIPLES");
     let mut triples: Vec<Triple> = Vec::new();
     let mut next = true;
@@ -281,7 +438,7 @@ fn extract_nsd<'a>(query: &Context<impl OpenCall>, s: &Term) -> Result<osm::nsd:
                 }
             }
         },
-        Err(err) => return Err(OZError{msg:"Error extracting NSD".to_string()}),
+        Err(_err) => return Err(OZError{msg:"Error extracting NSD".to_string()}),
     }
     
     Err(OZError{msg:"Error extracting NSD".to_string()})
@@ -397,7 +554,7 @@ fn create_graph(triples: &mut Vec<Triple>) -> common::KGraph {
 }
 
 pub fn translate_output<'a>(param: &Term, ctx: &Context<impl FrameableContextType>) -> Vec<String> {
-    let ctx = ctx.open_frame();
+    let _ctx = ctx.open_frame();
     let mut output: Vec<String> = Vec::new();
     match param.term_type() {
         swipl::term::TermType::Atom => {
@@ -406,7 +563,7 @@ pub fn translate_output<'a>(param: &Term, ctx: &Context<impl FrameableContextTyp
         },
         swipl::term::TermType::CompoundTerm => {
 
-            let r = param.record();
+            let _r = param.record();
             //let mut vec: Vec<String> = param.get::<Vec<String>>().unwrap();
             let mut vec: Vec<String> = Vec::new();
             vec.push(format!("{}", rand::random::<u8>()));
@@ -446,7 +603,7 @@ pub fn prospect_network(data: &AppState) -> common::KGraph {
     let s = ctx.new_term_ref();
     let p = ctx.new_term_ref();
     let o = ctx.new_term_ref();
-    let mut query = dump_prospect_network(&ctx, &s, &p, &o);
+    let query = dump_prospect_network(&ctx, &s, &p, &o);
 
     let mut triples = extract_triples(&query, &s, &p, &o);
 
@@ -467,7 +624,7 @@ pub fn deploy_network(data: &AppState) -> common::KGraph {
     let s = ctx.new_term_ref();
     let p = ctx.new_term_ref();
     let o = ctx.new_term_ref();
-    let mut query = dump_deployment(&ctx, &s, &p, &o);
+    let query = dump_deployment(&ctx, &s, &p, &o);
 
     let mut triples = extract_triples(&query, &s, &p, &o);
 
@@ -482,14 +639,14 @@ pub fn infer_intent(data: &AppState) -> common::KGraph {
     
     let intent_lock = &data.services;
     let intent = intent_lock.get(0).unwrap();
-    let intent_clean = &intent.intent_clean;
+    let _intent_clean = &intent.intent_clean;
     let ctx = load_prolog(&engine);
     insert_data(&ctx, &intent.intent_clean, "intent");
 
     let s = ctx.new_term_ref();
     let p = ctx.new_term_ref();
     let o = ctx.new_term_ref();
-    let mut query = dump_inferred_intent(&ctx, &s, &p, &o);
+    let query = dump_inferred_intent(&ctx, &s, &p, &o);
 
     let mut triples = extract_triples(&query, &s, &p, &o);
 
@@ -505,7 +662,7 @@ pub fn get_intent(data: &AppState) -> common::KGraph {
     
     let intent_lock = &data.services;
     let intent = intent_lock.get(0).unwrap();
-    let intent_clean = &intent.intent_clean;
+    let _intent_clean = &intent.intent_clean;
     let ctx = load_prolog(&engine);
 
     insert_data(&ctx, &intent.intent_clean, "intent");
@@ -513,7 +670,7 @@ pub fn get_intent(data: &AppState) -> common::KGraph {
     let s = ctx.new_term_ref();
     let p = ctx.new_term_ref();
     let o = ctx.new_term_ref();
-    let mut query = dump_intent(&ctx, &s, &p, &o);
+    let query = dump_intent(&ctx, &s, &p, &o);
 
     let mut triples = extract_triples(&query, &s, &p, &o);
 
@@ -534,7 +691,7 @@ pub fn infer_network(data: &AppState) -> common::KGraph {
     let s = ctx.new_term_ref();
     let p = ctx.new_term_ref();
     let o = ctx.new_term_ref();
-    let mut query = dump_inferred_network(&ctx, &s, &p, &o);
+    let query = dump_inferred_network(&ctx, &s, &p, &o);
     let mut triples = extract_triples(&query, &s, &p, &o);
 
     info!("Infer Network: {}ms", start.elapsed().as_millis());
@@ -553,7 +710,7 @@ pub fn get_network(data: &AppState) -> common::KGraph {
     let s = ctx.new_term_ref();
     let p = ctx.new_term_ref();
     let o = ctx.new_term_ref();
-    let mut query = dump_network(&ctx, &s, &p, &o);
+    let query = dump_network(&ctx, &s, &p, &o);
     let mut triples = extract_triples(&query, &s, &p, &o);
 
     println!("Length of triples: {}", triples.len());
@@ -600,7 +757,7 @@ pub fn get_nsd(data: &AppState) -> Result<NSD, OZError> {
     let p = ctx.new_term_ref();
     let o = ctx.new_term_ref();
     let query = dump_deployment(&ctx, &s, &p, &o);
-    let triples: PrologTriples = extract_triples(&query, &s, &p, &o);
+    let _triples: PrologTriples = extract_triples(&query, &s, &p, &o);
     query.cut();
 
     let d = ctx.new_term_ref();
@@ -614,7 +771,7 @@ pub fn get_nsd(data: &AppState) -> Result<NSD, OZError> {
             }
             return Ok(o)
         },
-        Err(err) => return Err(OZError{msg:"Get_NSD".to_string()})
+        Err(_err) => return Err(OZError{msg:"Get_NSD".to_string()})
     }
 }
 
@@ -623,7 +780,7 @@ pub fn validate_intent(data: &AppState) -> Vec<(String, String)> {
     let engine = Engine::new();
     
     let intent = data.services.get(0).unwrap();
-    let intent_clean = &intent.intent_clean;
+    let _intent_clean = &intent.intent_clean;
     let ctx = load_prolog_oz(&engine);
 
     insert_data(&ctx, &data.network, "live_network");
@@ -631,7 +788,7 @@ pub fn validate_intent(data: &AppState) -> Vec<(String, String)> {
 
     let s = ctx.new_term_ref();
     let o = ctx.new_term_ref();
-    let mut query = assert_all(&ctx, &s, &o);
+    let query = assert_all(&ctx, &s, &o);
 
     // Get results and return
     let unform = extract_all(&query, vec![&s, &o]);
@@ -648,10 +805,10 @@ pub fn fix(data: &AppState) -> Vec<Triple> {
     let start = Instant::now();
     let engine = Engine::new();
     
-    let mut live_data = &data.network;
+    let _live_data = &data.network;
     let intent_lock = &data.services;
     let intent = intent_lock.get(0).unwrap();
-    let intent_clean = &intent.intent_clean;
+    let _intent_clean = &intent.intent_clean;
     let ctx = load_prolog(&engine);
 
     //insert_data(&ctx, &data.network, "live_network");
@@ -661,7 +818,7 @@ pub fn fix(data: &AppState) -> Vec<Triple> {
     let query = ctx.open(pred!{fix_all/1}, [&al]);
     */
     let query = ctx.open(pred!{try_fix_all/0}, []);
-    query.next_solution();
+    let _ =query.next_solution();
     info!("Fix: {}micros", start.elapsed().as_micros());
     //let action_list = term_to_json(&ctx, &al);
 
@@ -669,8 +826,8 @@ pub fn fix(data: &AppState) -> Vec<Triple> {
     let s = ctx.new_term_ref();
     let p = ctx.new_term_ref();
     let o = ctx.new_term_ref();
-    let mut newquery = dump_network(&ctx, &s, &p, &o);
-    let mut triples = extract_triples(&newquery, &s, &p, &o);
+    let newquery = dump_network(&ctx, &s, &p, &o);
+    let triples = extract_triples(&newquery, &s, &p, &o);
     //live_data.clear();
     //live_data.append(&mut triples);
     
@@ -682,34 +839,34 @@ pub fn fix(data: &AppState) -> Vec<Triple> {
     triples
 }
 
-pub fn apply_changes(data: &AppState, new_network: Vec<Triple>) {
+pub fn apply_changes(data: &AppState, _new_network: Vec<Triple>) {
     let start = Instant::now();
     let engine = Engine::new();
     let intent_lock = &data.services;
     let intent = intent_lock.get(0).unwrap();
-    let intent_clean = &intent.intent_clean;
+    let _intent_clean = &intent.intent_clean;
     let ctx = load_prolog(&engine);
 
     insert_data(&ctx, &data.network, "live_network");
     //insert_data(&ctx, &intent.intent_clean, "intent");
     //insert_data(&ctx, &new_network, "delta_network");
 
-    let query = execute_changes(&ctx);
+    let _query = execute_changes(&ctx);
     info!("Fix: {}ms", start.elapsed().as_millis());
 
     info!("Apply Changes: {}ms", start.elapsed().as_millis());
 }
 
-pub fn validate_design(data: &AppState, network: Vec<Triple>) -> Vec<(String, String)> {
+pub fn validate_design(data: &AppState, _network: Vec<Triple>) -> Vec<(String, String)> {
     let start = Instant::now();
     let engine = Engine::new();
     let intent_lock = &data.services;
     let intent = intent_lock.get(0).unwrap();
-    let intent_clean = &intent.intent_clean;
+    let _intent_clean = &intent.intent_clean;
     let ctx = load_prolog_oz(&engine);
 
     let query = clear_network(&ctx);
-    while let Ok(s) = query.next_solution() {}
+    while let Ok(_s) = query.next_solution() {}
     drop(query);
     insert_data(&ctx, &data.network, "live_network");
     //insert_data(&ctx, &intent.intent_clean, "intent");
@@ -729,7 +886,7 @@ pub fn validate_design(data: &AppState, network: Vec<Triple>) -> Vec<(String, St
     pairs
 }
 
-pub fn get_infrastructure(data: &AppState, layer: &str) -> common::KGraph {
+pub fn get_infrastructure(_data: &AppState, layer: &str) -> common::KGraph {
     let engine = Engine::new();
     let ctx = load_prolog_all(&engine);
 
@@ -764,16 +921,16 @@ pub fn get_infrastructure(data: &AppState, layer: &str) -> common::KGraph {
     create_graph(&mut triples)
 }
 
-pub fn validate(data: &AppState) {
+pub fn validate(_data: &AppState) {
     let engine = Engine::new();
-    let ctx = load_prolog_all(&engine);
+    let _ctx = load_prolog_all(&engine);
 }
-pub fn change() {
+pub fn change(_data: &AppState) {
     let engine = Engine::new();
-    let ctx = load_prolog_all(&engine);
+    let _ctx = load_prolog_all(&engine);
 }
 
-pub fn invalidate(data: &AppState) {
+pub fn invalidate(_data: &AppState) {
     let engine = Engine::new();
-    let ctx = load_prolog_all(&engine);
+    let _ctx = load_prolog_all(&engine);
 }

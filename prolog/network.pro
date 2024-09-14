@@ -11,12 +11,17 @@
 		hasVCPUCapacity/2,
 		hasMemoryCapacity/2,
 		hasStorageCapacity/2,
+		requestVCPUCapacity/2,
+		requestMemoryCapacity/2,
+		requestStorageCapacity/2,
 		physicalNetworkPath/2,
 		validPhysicalNetworkPath/2,
 		validPhysicalNetworkRoute/3,
+		claim_bandwidth_route/3,
 		validHop/1,
 		networkHop/1,
-		convert_xsd/2
+		convert_xsd/2,
+		connectedByWire/2
 ]).
 
 :- dynamic validRoute/2.
@@ -36,7 +41,9 @@ test_network :-
 	%rdf_load('../ontologies/examples/infrastructure/bt.ttl', [format(turtle), graph('live_network'), multifile(true)]) ,
 	%rdf_load('../ontologies/examples/infrastructure/bt-full-example.ttl', [format(turtle), graph('live_network'), multifile(true)]) .
 	%rdf_load('../ontologies/examples/infrastructure/bt-full-ext.ttl', [format(turtle), graph('live_network'), multifile(true)]) .
-	rdf_load('../ontologies/examples/infrastructure/new-bt.ttl', [format(turtle), graph('live_network'), multifile(true)]) .
+	%rdf_load('../ontologies/examples/infrastructure/new-bt.ttl', [format(turtle), graph('live_network'), multifile(true)]) .
+	rdf_load('../ontologies/examples/infrastructure/bt-uk-full.ttl', [format(turtle), graph('live_network'), multifile(true)]) .
+	%rdf_load('../ontologies/examples/5g/free5gc.ttl', [format(turtle), graph('live_network'), multifile(true)]) .
 
 output_file :-
 	rdf_save_turtle('./prolog/proc_network.ttl', [only_known_prefixes(true), a(true)]).
@@ -47,7 +54,7 @@ load_network :-
 	rdf_create_graph('live_network'),
 	rdf_create_graph('inferred_network'),
 	rdf_create_graph('prospect_network'),
-	rdf_load('../ontologies/examples/tmf_example/service.ttl', [format(turtle), graph('service'), register_namespaces(true)]),
+	%rdf_load('../ontologies/services/free5gc.ttl', [format(turtle), graph('service'), register_namespaces(true)]),
 	rdf_load('../ontologies/network/network.ttl', [format(turtle), graph('network_model'), register_namespaces(true)]).
 
 clear_network :-
@@ -199,10 +206,20 @@ physicalNetworkPath(A, B) :-
 	physicalNetworkPath(Y, B).
 
 physicalNetworkPathStep(X, Y) :-
-	hasInterface(X, Y);
-	physicalLink(X, Y);
-	isRunningOn(X, Y);
-	isRunningOn(Y, X).
+	rdf(X, nm:hasInterface, Y);
+	rdf(Y, nm:hasInterface, X);
+	rdf_has(X, nm:physicalLink, Y);
+	rdf_has(Y, nm:physicalLink, X);
+	rdf_has(X, nm:radioLink, Y);
+	rdf_has(Y, nm:radioLink, X);
+	rdf_has(X, nm:isRunningOn, Y);
+	rdf_has(Y, nm:isRunningOn, X).
+	%hasInterface(X, Y);
+	%physicalLink(X, Y);
+	%radioLink(X, Y);
+	%link(X, Y);
+	%isRunningOn(X, Y).
+	%isRunningOn(Y, X).
 
 /*
 :- table physicalNetworkRoute/3.
@@ -239,7 +256,9 @@ testPhysicalNetworkPath(A, B) :-
 
 testPhysicalNetworkPathStep(X, Y) :-
 	hasInterface(X, Y);
-	physicalLink(X, Y);
+	%physicalLink(X, Y);
+	%radioLink(X, Y);
+	link(X, Y);
 	isRunningOn(X, Y);
 	isRunningOn(Y, X).
 
@@ -249,15 +268,26 @@ validPhysicalNetworkPath(A, B) :-
 	validPhysicalNetworkPathStep(A, B);
 	validPhysicalNetworkPath(A, Y),
 	A \= Y,
+	% Is this needed? validHop == networkHop
 	networkHop(Y),
 	validHop(Y),
 	validPhysicalNetworkPath(Y, B).
 
+% Better calculation due to repeated visits...
 validPhysicalNetworkPathStep(X, Y) :-
-	hasInterface(X, Y);
-	physicalLink(X, Y);
-	isRunningOn(X, Y);
-	isRunningOn(Y, X).
+	rdf(X, nm:hasInterface, Y);
+	rdf_has(X, nm:physicalLink, Y);
+	rdf_has(Y, nm:physicalLink, X);
+	rdf_has(X, nm:radioLink, Y);
+	rdf_has(Y, nm:radioLink, X);
+	rdf_has(X, nm:isRunningOn, Y);
+	rdf_has(Y, nm:isRunningOn, X).
+	%hasInterface(X, Y);
+	%physicalLink(X, Y);
+	%radioLink(X, Y);
+	%link(X, Y);
+	%isRunningOn(X, Y).
+	%isRunningOn(Y, X).
 
 /* Like validPhysicalNetworkPath
  * except returns list of hops. */
@@ -266,7 +296,7 @@ validPhysicalNetworkPathStep(X, Y) :-
 validPhysicalNetworkRoute(A, B, Route) :-
 	shortest_valid_network_path(A, B, Route).
 
-:- table shortest_network_path as incremental.
+%:- table shortest_network_path as incremental.
 shortest_network_path(Start, Goal, Route) :-
 	shortest_network_path([[Start]|Tail]-Tail, [], Goal, Route).
 
@@ -306,7 +336,8 @@ shortest_valid_network_path([[Current|Path]|Rest]-RT, Visited, Goal, Route) :-
 	ground(Current),
     findall(Neighbor, (
 		physicalNetworkPathStep(Current, Neighbor),
-		networkHop(Neighbor),
+		% Again... is this needed? validHop == networkHop.
+		%networkHop(Neighbor),
 		validHop(Neighbor),
 		\+ member(Neighbor, Visited)
 	), Neighbors),
@@ -347,6 +378,11 @@ deployedOnMachine(X, Y) :-
 	isRunningOn(X, KVM),
 	physicalMachine(Y),
 	isRunningOn(KVM, Y).
+
+connectedByWire(X, Y) :-
+	physicalLink(B, X),
+	wire(B),
+	physicalLink(B, Y).
 
 find_overloaded_devices(List, Res) :- find_overloaded_devices(List, [], Res).
 find_overloaded_devices([], Acc, Acc).
@@ -391,6 +427,8 @@ min_bandwidth_route([Hop|Route], Last, _) :-
 min_bandwidth_route([_|Route], Last, Total) :-
 	min_bandwidth_route(Route, Last, Total).
 
+% Edited to exclude undo.
+% Must reedit to enable alternative choices.
 claim_bandwidth_route([], _, _).
 claim_bandwidth_route([Hop|Route], Claimant, Amount) :- 
 	%writeln('NOT CLAMING BANDWIDTH'),
@@ -400,7 +438,7 @@ claim_bandwidth_route([Hop|Route], Claimant, Amount) :-
 	%writeln('CLAMING BANDWIDTH'),
 	wire(Hop),
 	claim_bandwidth(Hop, Claimant, Amount),
-	undo(unclaim_bandwidth(Hop, Claimant)),
+	%undo(unclaim_bandwidth(Hop, Claimant)),
 	claim_bandwidth_route(Route, Claimant, Amount).
 
 unclaim_bandwidth_route([Hop|Route], Claimant) :-
@@ -413,9 +451,9 @@ unclaim_bandwidth_route([Hop|Route], Claimant) :-
 	unclaim_bandwidth_route(Route, Claimant).
 
 claim_bandwidth(Hop, Claimant, Amount) :-
-	%writeln('Free'),
 	%writeln(Hop),
 	free_bandwidth(Hop, Free),
+	%writeln(Free),
 	Free > 0,
 	Free >= Amount,
 	short_uuid(SUUID),
@@ -427,6 +465,7 @@ claim_bandwidth(Hop, Claimant, Amount) :-
 	incr_invalidate_call(validHop(Hop)).
 
 unclaim_bandwidth(Hop, Claimant) :-
+	writeln("UNCLAIMED AGAIN"),
 	user:ownsClaim(Claimant, SUUID),
 	user:claimTarget(SUUID, Hop),
 	retract(user:bandwidthClaim(SUUID)),
@@ -580,7 +619,7 @@ free_memory(M, Free) :-
 		);
 		SumList = 0
 	),
-	Free = MTotal - SumList.
+	Free is MTotal - SumList.
 
 free_vcpu(M, Free) :-
 	vcpuResource(M, VCR),
@@ -594,7 +633,7 @@ free_vcpu(M, Free) :-
 		sum_vcpu(DUs, DUC);
 		DUC = 0
 	),
-	Free = CTotal - DUC.
+	Free is CTotal - DUC.
 
 free_bandwidth(Hop, Free) :-
 	bandwidth(Hop, BW),
@@ -625,7 +664,7 @@ free_storage(M, Free) :-
 		);
 		SumList = 0
 	),
-	Free = STotal - SumList.
+	Free is STotal - SumList.
 
 sum_vcpu([], Res) :- Res = 0.
 sum_vcpu([H|T], Res) :-
@@ -637,6 +676,7 @@ sum_vcpu([H|T], Res) :-
 sum_bandwidth([], Res) :- 
 	Res is 0.
 sum_bandwidth([H|T], Res) :-
+	%writeln("Sum Bandwidth"),
 	sum_bandwidth(T, Last),
 	bandwidth(H, BUtil),
 	convert_xsd(BUtil, Num),
@@ -1225,9 +1265,6 @@ assert_redundant(_) :-
 		hasDeploymentUnit(OF, ODU),
 		hasFunction(FC, F),
 		hasFunction(OFC, OF),
-		%requiresFunctionChain(S, FC),
-		%requiresFunctionChain(S, OFC),
-		%serviceSpecification(S),
 		FC \= OFC
 	).
 
@@ -1296,9 +1333,6 @@ assert_connected([Device|Devices]) :-
 		true;
 		NetDevices = []
 	),
-	%isRunningOn(Device, Host),
-	%validate_connectivity(Device, NetDevices).
-	%validPhysicalNetworkRoute(Device, )
 	assert_connected(Device, NetDevices),
 	assert_connected(Devices).
 
@@ -1328,9 +1362,6 @@ assert_routes([Device|Devices]) :-
 		true;
 		NetDevices = []
 	),
-	%isRunningOn(Device, Host),
-	%validate_connectivity(Device, NetDevices).
-	%validPhysicalNetworkRoute(Device, )
 	assert_routes(Device, NetDevices),
 	assert_routes(Devices).
 
@@ -1370,8 +1401,6 @@ assert_network(Devices) :-
 	
 assert_connected(_, []).
 assert_connected(Device, [ODevice|ODevices]) :-
-	%validate_connectivity(Device, ODevice),
-	%validPhysicalNetworkRoute(Device, ODevice, _),
 	user:validate_allocation(Device, ODevice),
 	assert_connected(Device, ODevices).
 
@@ -1436,4 +1465,66 @@ break_service :-
 		network:deploy_on_host(DU, H)
 	)).
 
+% Create 5G topology
 
+create_fiveg :-
+	create_fiveg(0, 1, 20).
+
+create_fiveg(M, _, O) :-
+	M >= O.
+
+create_fiveg(LastMetro, LastGNode, MetroTotal) :-
+	create_fiveg(LastMetro, LastGNode, NextMetro, NextGNode, MetroTotal),
+	create_fiveg(NextMetro, LastGNode, AnotherMetro, AnotherGNode, MetroTotal),
+	create_fiveg(AnotherMetro, AnotherGNode, MetroTotal).
+
+:- rdf_meta create_switch(_, _, o, o, _).
+create_fiveg(Metro1, GNodeBNum, Metro2, GNode2, MetroTotal) :-
+	format(atom(MetroID), "~a~a", ["metroUK", Metro1]),
+	Metro2 is Metro1+1,
+	format(atom(MetroID2), "~a~a", ["metroUK", Metro2]),
+	rdf_global_id(nm:'MetroSwitch', MS),
+	create_switch(MetroID, '', wd:'Q145', wd:'Q84', MS),
+	create_switch(MetroID2, '', wd:'Q145', wd:'Q84', MS),
+	format(atom(GNodeBID), "~a~a", ["gNodeB", GNodeBNum]),
+	create_gnodeb(GNodeBID),
+	create_wire(MetroID, GNodeBID),
+	create_wire(MetroID2, GNodeBID),
+	GNode2 is GNodeBNum+1.
+
+:- rdf_meta create_switch(_, _, o, o, o).
+create_switch(OID, Label, Country, Location, SwitchType) :-
+	rdf_global_id(cn:OID, ID),
+	rdf_assert(ID, rdf:type, SwitchType),
+	rdf_assert(ID, rdf:label, Label),
+	rdf_assert(ID, nm:country, Country),
+	rdf_assert(ID, nm:deviceLocation, Location).
+
+create_wire(ID1, ID2, BW, LAT) :-
+	format(atom(FID), "~a_~a", [ID1, ID2]),
+	rdf_global_id(cn:FID, WireID),
+	create_wire(WireID, BW, LAT),
+	rdf_assert(WireID, nm:physicalLink, ID1),
+	rdf_assert(WireID, nm:physicalLink, ID2).
+
+create_wire(ID, BW, LAT) :-
+	format(atom(WireID), "~a", [ID]),
+	rdf_global_object(nm:'Wire', W),
+	rdf_assert(WireID, rdf:type, W),
+	rdf_assert(WireID, nm:bandwidth, BW),
+	rdf_assert(WireID, nm:latency, LAT).
+
+create_wire(ID1, ID2) :-
+	%create_wire(ID1, ID2, "10000000000"^^xsd:string, "1"^^xsd:integer).
+	create_wire(ID1, ID2, 10000000000, 1).
+
+create_gnodeb(ID) :-
+	rdf_global_object(nm:'gNodeB', GB),
+	rdf_assert(ID, rdf:type, GB).
+
+create_physical_machine(ID) :-
+	rdf_assert(ID, rdf:type, nm:'PhysicalMachine'),
+	rdf_assert(ID, nm:cpuUtilization, 0),
+	rdf_assert(ID, nm:vcpuResource, 20),
+	rdf_assert(ID, nm:storageResource, 135074160640),
+	rdf_assert(ID, nm:memoryResource, 135074160640).

@@ -1,0 +1,54 @@
+@prefix : <http://www.semanticweb.org/paul/ontologies/2023/1/facts#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix xml: <http://www.w3.org/XML/1998/namespace> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@base <http://www.semanticweb.org/paul/ontologies/2023/1/facts> .
+
+##<http://www.semanticweb.org/paul/ontologies/2023/1/facts> rdf:type owl:Ontology .
+
+:Sean rdf:type :Person ;
+	:hasBrother :Paul .
+
+:Claire rdf:type :Person ;
+	:hasFather :Bob ;
+	:hasBrother :Julian .
+
+:Julian rdf:type :Person .
+
+:Bob rdf:type :Person ;
+	:hasSon :Julian .
+
+:Paul rdf:type :Person ;
+	:hasMother :Claire .
+
+:Edward rdf:type :Person ;
+	:hasFather :Julian .
+
+:Person a rdfs:Class ;
+	rdfs:subClassOf rdfs:Class	.
+
+:Uncle a rdfs:Class ;
+	rdfs:subClassOf :Person	.
+
+:Brother a rdfs:Class ;
+	rdfs:subClassOf :Person .
+
+:Mother a rdfs:Class ;
+	rdfs:subClassOf :Person .
+
+:hasMother a rdf:Property ;
+	rdfs:subPropertyOf rdf:Property .
+
+:hasBrother a rdf:Property ;
+	rdfs:subPropertyOf rdf:Property .
+
+:hasFather a rdf:Property ;
+	rdfs:subPropertyOf rdf:Property .
+
+:hasSon a rdf:Property ;
+	rdfs:subPropertyOf rdf:Property .
+
+:hasUncle a rdf:Property ;
+	rdfs:subPropertyOf rdf:Property .

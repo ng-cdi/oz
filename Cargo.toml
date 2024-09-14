@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-swipl = { version = "0.3", features = ["serde"]}
+swipl = { version = "0.3.16", features = ["serde"]}
 swipl-info = "0.3.2"
 futures = "0.3"
 tokio = { version = "1.21", features = ["rt", "macros", "rt-multi-thread"] }
@@ -21,6 +21,8 @@ serde_with = "2.3.2"
 env_logger = "0.10.0"
 log = "0.4.17"
 uuid = { version = "1.3.1", features = ["v4", "fast-rng"]}
+hex = "0.4.3"
+clap = { version = "4.5.8", features = ["derive"]}
 
 # Python FFI
 #pythonize = "*"
@@ -60,6 +62,11 @@ actix-files = "*"
 actix-web-actors = "4.1.0"
 
 # RDF
-oxigraph = "0.3.17"
+oxigraph = "0.3.22"
 sophia = { version = "0.7.2", features = ["xml"]}
 csv = "1.2"
+
+# Demo
+#netns-rs = "0.1.0"
+bollard = "0.16.1"
+#rtnetlink = "0.14.1"

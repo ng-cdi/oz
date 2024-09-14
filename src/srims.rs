@@ -1,12 +1,6 @@
-use std::sync::Arc;
-use std::thread;
-use std::{error::Error, io, process};
-use std::{fs::File};
-use csv::{DeserializeRecordsIter, Reader};
+use std::fs::File;
+use csv::Reader;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
-use futures::{executor, future};
-use std::sync::mpsc::channel;
-use threadpool::ThreadPool;
 
 use super::common::{KGraph, Triple};
 
@@ -242,7 +236,7 @@ fn get_thing<'a, D: DeserializeOwned>(file: &mut Reader<File>, vec: &mut Vec<D>)
 pub fn get_all_chassis(srims: &mut SRIMS) -> Vec<Chassis> {
     let mut chassis: Vec<Chassis> = Vec::new();
 
-    for i in 0..=srims.chassis.len() {
+    for _i in 0..=srims.chassis.len() {
         let cha = srims.chassis.pop();                
         match cha {
             Some(i) => {
@@ -268,7 +262,7 @@ pub fn get_all_chassis(srims: &mut SRIMS) -> Vec<Chassis> {
 } 
 
 pub fn srims_to_rdf(srims: &mut SRIMS) -> Vec<SRIMSDevice> {
-    let chassis = get_all_chassis(srims);
+    //let chassis = get_all_chassis(srims);
 
     let mut all: Vec<SRIMSDevice> = Vec::new();
     for dev in srims.devices.iter() {
@@ -382,7 +376,7 @@ pub fn get_graph() -> KGraph {
                 p: "hasChassis".to_string(),
                 o: next_pos.to_string(),
             }); 
-            next_pos += 1;
+            //next_pos += 1;
         }
     }
     println!("{:?}", nodes);

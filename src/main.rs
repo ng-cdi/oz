@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use std::collections::HashMap;
 use std::sync::{RwLock, Arc};
 use std::fs::File;
@@ -11,6 +12,7 @@ use sophia::triple::stream::TripleSource;
 use swipl::prelude::*;
 use common::{AppState, turtle_to_xml, Triple, Config};
 use log::info;
+use clap::Parser;
 
 use crate::api::sessions::SessionManager;
 use crate::common::{Catalog, to_rdf, OzIntent};
@@ -22,6 +24,33 @@ mod common;
 mod srims;
 mod models;
 mod monitor;
+mod demo;
+mod onos;
+
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
+struct Args {
+    /// Setup full system
+    #[arg(short, long)]
+    setup: bool,
+
+    /// Clean system
+    #[arg(short, long)]
+    clean: bool,
+
+    /// Run whatever test
+    #[arg(short, long)]
+    test: bool,
+
+    /// Test Intent
+    #[arg(short, long)]
+    intent: Option<String>,
+    
+    /// Add Subscriber
+    #[arg(short, long)]
+    addsub: Option<u8>,
+
+}
 
 //const GRAPHDB: &str = "http://localhost:7200";
 
@@ -32,7 +61,7 @@ fn srims_test() {
 }
 
 fn convert_test() {
-    let files: Vec<File> = Vec::new();   
+    let _files: Vec<File> = Vec::new();   
     let mut icm = File::open("../ontologies/tmf/icm.ttl").unwrap();
     let mut network_model = File::open("../ontologies/network/network.ttl").unwrap();
     let mut intent_model = File::open("../ontologies/intent/intent.ttl").unwrap();
@@ -93,7 +122,7 @@ fn validation_loop(data: Data<RwLock<AppState>>) {
         drop(data_read);
         {
             let mut data = data.write().unwrap();
-            let mut service_lock = &mut data.services;
+            let service_lock = &mut data.services;
             let service = service_lock.get_mut(0).unwrap();
             let intent = &mut service.intent;
             intent.status = results.clone();
@@ -112,6 +141,7 @@ fn validation_loop(data: Data<RwLock<AppState>>) {
     }
 }
 
+#[allow(unused_assignments)]
 async fn first_setup(cfg: Config) -> AppState {
 
     let mut live_network: Vec<Triple> = Vec::new();
@@ -193,18 +223,53 @@ async fn first_setup(cfg: Config) -> AppState {
 
 fn main() {
 
+    //holmes::ontology::generate_prolog("../ontologies/network/network.ttl", "./prolog/ont_network.pro");
+    //holmes::ontology::generate_prolog("../ontologies/intent/intent.ttl", "./prolog/ont_intent.pro");
+    
+    let args = Args::parse();
+
     env_logger::init();
     let rt = tokio::runtime::Runtime::new().unwrap();
 
     // Get clients
-    let cfg = common::read_config();
+    let _cfg = common::read_config();
 
-    //holmes::ontology::generate_prolog("../ontologies/network/network.ttl", "./prolog/ont_network.pro");
-    //holmes::ontology::generate_prolog("../ontologies/intent/intent.ttl", "./prolog/ont_intent.pro");
+
+    if args.clean {
+        rt.block_on(demo::cleanup());
+    } else if args.setup {
+        rt.block_on(demo::start_demo());
+    } else if args.test {
+        rt.block_on(demo::test());
+    } else if let Some(device) = args.intent {
+        rt.block_on(onos::add_flow(device))
+    } else if let Some(sub) = args.addsub {
+        rt.block_on(demo::add_subscriber(sub));
+    } 
+
+    return;
+
+
+
+    // Files manually edited...
 
     // First Startup
-    let aps = rt.block_on(first_setup(cfg));
-    let appstate = Data::new(RwLock::new(aps));
+    //let aps = rt.block_on(first_setup(cfg));
+    //let appstate = Data::new(RwLock::new(aps));
+    
+    /*
+    let de = prolog::DomainExpert::new();
+    de.load_prolog_all();
+    let ctx = de.get_context();
+    let dump_core_switches = pred!{coreSwitch/1};
+    //let dump_core_switches = pred!{dump_core_switchesb/3};
+    //let dump_core_switches = pred!{arnold/3};
+    let stuff = de.query_extract(ctx, dump_core_switches);
+    println!("{:?}", stuff);
+    for i in stuff {
+        println!("{:?}", i);
+    }
+    */
 
     // Start validation loop
   
@@ -214,12 +279,14 @@ fn main() {
         validation_loop(asc);
     });
     */
-   
+
     // Start api server
+    /*
     info!("Oz: Server started!");
     rt.block_on(
         async {
             api::start_server(appstate).await.unwrap();
         }
     );
+    */
 }

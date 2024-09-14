@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use futures::join;
 use log::info;
-use reqwest::{Client, ClientBuilder, Proxy};
+use reqwest::{Client, Proxy};
 use serde::{Serialize,Deserialize};
 use serde_json::Value;
 

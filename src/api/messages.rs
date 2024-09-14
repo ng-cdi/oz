@@ -1,9 +1,8 @@
 use actix::{Message, Recipient};
 use serde::{Serialize, Deserialize};
-use serde_with::serde_as;
 use uuid::Uuid;
 
-use crate::common::{IntentStatus, Triple, PrologTriples};
+use crate::common::{IntentStatus, PrologTriples};
 
 /*
 #[derive(Serialize, Deserialize, Message)]

@@ -1,7 +1,6 @@
-use std::{fs::File, io::{BufWriter, Write}, sync::RwLock};
-use std::time::{Duration, Instant};
-use actix_web::{App, HttpResponse, HttpServer, Responder, HttpRequest, web::{self, Json}};
-use actix_web::{get, post, patch, delete};
+use std::sync::RwLock;
+use actix_web::{HttpResponse, Responder, HttpRequest, web::Json};
+use actix_web::post;
 use actix_web::web::Data;
 use log::info;
 use serde_json::{Value, Map};
@@ -51,15 +50,17 @@ pub struct RasaResponse {
 }
 
 #[post("/rasa")]
-pub async fn rasa(data: Data<RwLock<AppState>>, json: Json<Value>, req: HttpRequest) -> impl Responder {
+pub async fn rasa(data: Data<RwLock<AppState>>, json: Json<Value>, _req: HttpRequest) -> impl Responder {
     info!("Api: Rasa");
     //let jstring = serde_json::to_string_pretty(&json).unwrap();
     let name = json.get("tracker").unwrap().get("latest_message").unwrap().get("intent").unwrap().get("name").unwrap(); 
+    let data = data.write().unwrap();
 
-    match name {
+    match name.as_str().unwrap() {
         "validate" => prolog::validate(&data),
         "change" => prolog::change(&data),
         "heal" => prolog::invalidate(&data),
+        &_ => return HttpResponse::Ok()
     }
 
 

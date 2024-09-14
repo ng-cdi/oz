@@ -25,9 +25,15 @@ linuxBridge(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Guilva
 :- rdf_meta openVSwitch(o).
 :- dynamic openVSwitch/1.
 openVSwitch(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/network#OpenVSwitch').
+:- rdf_meta userEquipment(o).
+:- dynamic userEquipment/1.
+userEquipment(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/network#UserEquipment').
 :- rdf_meta snmp(o).
 :- dynamic snmp/1.
 snmp(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/network#SNMP').
+:- rdf_meta applicationFunction(o).
+:- dynamic applicationFunction/1.
+applicationFunction(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/network#ApplicationFunction').
 :- rdf_meta physicalNetwork(o).
 :- dynamic physicalNetwork/1.
 physicalNetwork(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/network#PhysicalNetwork').
@@ -79,6 +85,9 @@ rtsp(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Guilvareux/on
 :- rdf_meta xen(o).
 :- dynamic xen/1.
 xen(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/network#Xen').
+:- rdf_meta radioConnection(o).
+:- dynamic radioConnection/1.
+radioConnection(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/network#RadioConnection').
 :- rdf_meta physicalMachine(o).
 :- dynamic physicalMachine/1.
 physicalMachine(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/network#PhysicalMachine').
@@ -91,6 +100,9 @@ dns(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Guilvareux/ont
 :- rdf_meta bandwidthClaim(o).
 :- dynamic bandwidthClaim/1.
 bandwidthClaim(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/network#BandwidthClaim').
+:- rdf_meta policyControlFunction(o).
+:- dynamic policyControlFunction/1.
+policyControlFunction(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/network#PolicyControlFunction').
 :- rdf_meta securityGroupRule(o).
 :- dynamic securityGroupRule/1.
 securityGroupRule(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/network#SecurityGroupRule').
@@ -106,6 +118,9 @@ ipvlan(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Guilvareux/
 :- rdf_meta flavorAccess(o).
 :- dynamic flavorAccess/1.
 flavorAccess(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/network#FlavorAccess').
+:- rdf_meta networkSlice(o).
+:- dynamic networkSlice/1.
+networkSlice(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/network#NetworkSlice').
 :- rdf_meta nsd(o).
 :- dynamic nsd/1.
 nsd(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/network#NSD').
@@ -124,6 +139,9 @@ vnf(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Guilvareux/ont
 :- rdf_meta executionState(o).
 :- dynamic executionState/1.
 executionState(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/network#executionState').
+:- rdf_meta accessMobilityManagementFunction(o).
+:- dynamic accessMobilityManagementFunction/1.
+accessMobilityManagementFunction(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/network#AccessMobilityManagementFunction').
 :- rdf_meta nova(o).
 :- dynamic nova/1.
 nova(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/network#Nova').
@@ -142,6 +160,9 @@ vdur(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Guilvareux/on
 :- rdf_meta terms(o).
 :- dynamic terms/1.
 terms(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/network#Terms').
+:- rdf_meta gNodeB(o).
+:- dynamic gNodeB/1.
+gNodeB(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/network#gNodeB').
 :- rdf_meta ntp(o).
 :- dynamic ntp/1.
 ntp(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/network#NTP').
@@ -166,6 +187,9 @@ virtualNetworkInterface(Q) :- rdfs_individual_of(Q, 'http://raw.githubuserconten
 :- rdf_meta clusterTemplate(o).
 :- dynamic clusterTemplate/1.
 clusterTemplate(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/network#ClusterTemplate').
+:- rdf_meta userPlaneFunction(o).
+:- dynamic userPlaneFunction/1.
+userPlaneFunction(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/network#UserPlaneFunction').
 :- rdf_meta application(o).
 :- dynamic application/1.
 application(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/network#Application').
@@ -175,6 +199,12 @@ switchFunction(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Gui
 :- rdf_meta interface(o).
 :- dynamic interface/1.
 interface(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/network#Interface').
+:- rdf_meta logicalNetwork(o).
+:- dynamic logicalNetwork/1.
+logicalNetwork(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/network#LogicalNetwork').
+:- rdf_meta claim(o).
+:- dynamic claim/1.
+claim(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/network#Claim').
 :- rdf_meta stack(o).
 :- dynamic stack/1.
 stack(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/network#Stack').
@@ -190,6 +220,9 @@ virtualMachine(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Gui
 :- rdf_meta ftp(o).
 :- dynamic ftp/1.
 ftp(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/network#FTP').
+:- rdf_meta networkRepositoryFunction(o).
+:- dynamic networkRepositoryFunction/1.
+networkRepositoryFunction(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/network#NetworkRepositoryFunction').
 :- rdf_meta magnumService(o).
 :- dynamic magnumService/1.
 magnumService(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/network#MagnumService').
@@ -218,7 +251,7 @@ serviceFunction(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Gu
 :- dynamic openstackTerm/1.
 openstackTerm(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/network#OpenstackTerm').
 :- rdf_meta host(o).
-:- table host/1.
+:- dynamic host/1.
 host(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/network#Host').
 :- rdf_meta backendFunction(o).
 :- dynamic backendFunction/1.
@@ -256,6 +289,9 @@ osmTerm(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Guilvareux
 :- rdf_meta bgpFunction(o).
 :- dynamic bgpFunction/1.
 bgpFunction(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/network#BGPFunction').
+:- rdf_meta state(o).
+:- dynamic state/1.
+state(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/network#State').
 :- rdf_meta dataCentre(o).
 :- dynamic dataCentre/1.
 dataCentre(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/network#DataCentre').
@@ -268,12 +304,18 @@ namespace(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Guilvare
 :- rdf_meta network(o).
 :- dynamic network/1.
 network(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/network#Network').
+:- rdf_meta unifiedDataManagementFunction(o).
+:- dynamic unifiedDataManagementFunction/1.
+unifiedDataManagementFunction(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/network#UnifiedDataManagementFunction').
 :- rdf_meta onap(o).
 :- dynamic onap/1.
 onap(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/network#ONAP').
 :- rdf_meta resourceClaim(o).
 :- dynamic resourceClaim/1.
 resourceClaim(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/network#ResourceClaim').
+:- rdf_meta authenticationServerFunction(o).
+:- dynamic authenticationServerFunction/1.
+authenticationServerFunction(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/network#AuthenticationServerFunction').
 :- rdf_meta kubernetes(o).
 :- dynamic kubernetes/1.
 kubernetes(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/network#Kubernetes').
@@ -283,6 +325,9 @@ component(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Guilvare
 :- rdf_meta osm(o).
 :- dynamic osm/1.
 osm(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/network#OSM').
+:- rdf_meta networkExposureFunction(o).
+:- dynamic networkExposureFunction/1.
+networkExposureFunction(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/network#NetworkExposureFunction').
 :- rdf_meta udp(o).
 :- dynamic udp/1.
 udp(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/network#UDP').
@@ -319,9 +364,15 @@ routeFunction(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Guil
 :- rdf_meta firewallFunction(o).
 :- dynamic firewallFunction/1.
 firewallFunction(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/network#FirewallFunction').
+:- rdf_meta class(o).
+:- dynamic class/1.
+class(Q) :- rdfs_individual_of(Q, 'http://www.w3.org/2002/07/owl#Class').
 :- rdf_meta physicalSwitch(o).
 :- dynamic physicalSwitch/1.
 physicalSwitch(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/network#PhysicalSwitch').
+:- rdf_meta radioAccessFunction(o).
+:- dynamic radioAccessFunction/1.
+radioAccessFunction(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/network#RadioAccessFunction').
 :- rdf_meta icmp(o).
 :- dynamic icmp/1.
 icmp(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/network#ICMP').
@@ -406,6 +457,12 @@ ldap(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Guilvareux/on
 :- rdf_meta pdu(o).
 :- dynamic pdu/1.
 pdu(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/network#PDU').
+:- rdf_meta sessionManagementFunction(o).
+:- dynamic sessionManagementFunction/1.
+sessionManagementFunction(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/network#SessionManagementFunction').
+:- rdf_meta networkSliceSelectionFunction(o).
+:- dynamic networkSliceSelectionFunction/1.
+networkSliceSelectionFunction(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/network#NetworkSliceSelectionFunction').
 :- rdf_meta keypair(o).
 :- dynamic keypair/1.
 keypair(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/network#Keypair').
@@ -425,7 +482,7 @@ ipNetwork(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Guilvare
 :- dynamic vxcan/1.
 vxcan(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/network#VXCAN').
 :- rdf_meta wire(o).
-:- table wire/1.
+:- dynamic wire/1.
 wire(Q) :- rdfs_individual_of(Q, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/network#Wire').
 :- rdf_meta maCsec(o).
 :- dynamic maCsec/1.
@@ -447,6 +504,11 @@ isOf(X, Y) :- isDeploymentUnitOf(X, Y).
 isOf(X, Y) :- isInstanceOf(X, Y).
 isOf(X, Y) :- isInterfaceOf(X, Y).
 isOf(X, Y) :- isPackageOf(X, Y).
+:- table radioLink/2.
+:- rdf_meta radioLink(o, o).
+:- dynamic radioLink/2.
+radioLink(X, Y) :- rdf_has(X, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/network#radioLink', Y).
+radioLink(X, Y) :- radioLink(Y, X).
 :- rdf_meta target(o, o).
 :- dynamic target/2.
 target(X, Y) :- rdf_has(X, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/network#target', Y).
@@ -488,6 +550,10 @@ isRunningOn(X, Y) :- rdf_has(X, 'http://raw.githubusercontent.com/Guilvareux/ont
 :- dynamic isDoing/2.
 isDoing(X, Y) :- rdf_has(X, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/network#isDoing', Y).
 isDoing(X, Y) :- isExecuting(X, Y).
+:- rdf_meta id(o, o).
+:- dynamic id/2.
+id(X, Y) :- rdf_has(X, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/network#id', Y).
+id(X, Y) :- imei(X, Y).
 :- rdf_meta isInstanceOf(o, o).
 :- dynamic isInstanceOf/2.
 isInstanceOf(X, Y) :- rdf_has(X, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/network#isInstanceOf', Y).
@@ -526,11 +592,9 @@ isOn(X, Y) :- isRunningOn(X, Y).
 :- rdf_meta topDataProperty(o, o).
 :- dynamic topDataProperty/2.
 topDataProperty(X, Y) :- rdf_has(X, 'http://www.w3.org/2002/07/owl#topDataProperty', Y).
+topDataProperty(X, Y) :- id(X, Y).
 topDataProperty(X, Y) :- network(X, Y).
 topDataProperty(X, Y) :- role(X, Y).
-:- rdf_meta connectedByWire(o, o).
-:- dynamic connectedByWire/2.
-connectedByWire(X, Y) :- rdf_has(X, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/network#connectedByWire', Y).
 :- rdf_meta existsOn(o, o).
 :- dynamic existsOn/2.
 existsOn(X, Y) :- rdf_has(X, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/network#existsOn', Y).
@@ -563,6 +627,7 @@ hasInterface(X, Y) :- isInterfaceOf(Y, X).
 :- rdf_meta link(o, o).
 :- dynamic link/2.
 link(X, Y) :- rdf_has(X, 'http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/network#link', Y).
+link(X, Y) :- radioLink(X, Y).
 link(X, Y) :- physicalLink(X, Y).
 :- rdf_meta isVirtualInterfaceOf(o, o).
 :- dynamic isVirtualInterfaceOf/2.

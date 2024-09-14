@@ -1,0 +1,143 @@
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix  nm: <http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/network#> .
+@prefix  ln: <http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/live_network#> .
+
+# Named toplevel resources (26)
+
+<http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/live_network>
+	a owl:Ontology ;
+	owl:imports <http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/network> .
+
+ln:Archimedes
+	a nm:PhysicalMachine ,
+	  owl:NamedIndividual .
+
+ln:Archimedes_KVM
+	a nm:KVM ,
+	  owl:NamedIndividual ;
+	nm:isRunningOn ln:Archimedes .
+
+ln:Archimedes_NIC
+	a nm:WiredNetworkInterface ,
+	  owl:NamedIndividual ;
+	nm:connectedByWire ln:Router_INTF1 ;
+	nm:isPhysicalInterfaceOf ln:Archimedes .
+
+ln:Archimedes_br0
+	a nm:LinuxBridge ,
+	  owl:NamedIndividual ;
+	nm:connected ln:Archimedes_NIC ;
+	nm:existsOn ln:Archimedes .
+
+ln:OZ_NetworkFunctionChain
+	a nm:NetworkServiceFunctionChain ,
+	  owl:NamedIndividual ;
+	nm:hasNetworkFunction ln:SBE1 ,
+			      ln:SBE2 ,
+			      ln:SBE3 ,
+			      ln:VLB .
+
+ln:OZ_NetworkService
+	a nm:NetworkService ,
+	  owl:NamedIndividual ;
+	nm:has ln:OZ_NetworkFunctionChain .
+
+ln:Router
+	a nm:PhysicalRouter ,
+	  owl:NamedIndividual ;
+	nm:hasPhysicalInterface ln:Router_INTF1 ,
+				ln:Router_INTF2 .
+
+ln:Router_INTF1
+	a nm:WiredNetworkInterface ,
+	  owl:NamedIndividual .
+
+ln:Router_INTF2
+	a nm:WiredNetworkInterface ,
+	  owl:NamedIndividual .
+
+ln:SBE1
+	a nm:BackendFunction ,
+	  owl:NamedIndividual .
+
+ln:SBE1_VDU
+	a nm:DeploymentUnit ,
+	  owl:NamedIndividual ;
+	nm:hasVirtualInterface ln:SBE1_VDU_INTF ;
+	nm:isDeploymentUnitOf ln:SBE1 ;
+	nm:isRunningOn ln:Archimedes_KVM .
+
+ln:SBE1_VDU_INTF
+	a nm:VETH ,
+	  owl:NamedIndividual ;
+	nm:connected ln:Archimedes_br0 .
+
+ln:SBE2
+	a nm:BackendFunction ,
+	  owl:NamedIndividual .
+
+ln:SBE2_VDU
+	a nm:DeploymentUnit ,
+	  owl:NamedIndividual ;
+	nm:hasVirtualInterface ln:SBE2_VDU_INTF ;
+	nm:isDeploymentUnitOf ln:SBE2 ;
+	nm:isRunningOn ln:Tiny_KVM .
+
+ln:SBE2_VDU_INTF
+	a nm:VETH ,
+	  owl:NamedIndividual ;
+	nm:connected ln:Tiny_br0 .
+
+ln:SBE3
+	a nm:BackendFunction ,
+	  owl:NamedIndividual .
+
+ln:SBE3_VDU
+	a nm:DeploymentUnit ,
+	  owl:NamedIndividual ;
+	nm:hasVirtualInterface ln:SBE3_VDU_INTF ;
+	nm:isDeploymentUnitOf ln:SBE3 ;
+	nm:isRunningOn ln:Tiny_KVM .
+
+ln:SBE3_VDU_INTF
+	a nm:VETH ,
+	  owl:NamedIndividual ;
+	nm:connected ln:Tiny_br0 .
+
+ln:Tiny
+	a nm:PhysicalMachine ,
+	  owl:NamedIndividual .
+
+ln:Tiny_KVM
+	a nm:KVM ,
+	  owl:NamedIndividual ;
+	nm:isRunningOn ln:Tiny .
+
+ln:Tiny_NIC
+	a nm:WiredNetworkInterface ,
+	  owl:NamedIndividual ;
+	nm:connectedByWire ln:Router_INTF2 ;
+	nm:isPhysicalInterfaceOf ln:Tiny .
+
+ln:Tiny_br0
+	a nm:LinuxBridge ,
+	  owl:NamedIndividual ;
+	nm:connected ln:Tiny_NIC ;
+	nm:existsOn ln:Tiny .
+
+ln:VLB
+	a nm:LoadBalanceFunction ,
+	  owl:NamedIndividual ;
+	nm:hasDeploymentUnit ln:VLB_VDU .
+
+ln:VLB_VDU
+	a nm:DeploymentUnit ,
+	  owl:NamedIndividual ;
+	nm:hasVirtualInterface ln:VLB_VDU_INTF ;
+	nm:isRunningOn ln:Archimedes_KVM .
+
+ln:VLB_VDU_INTF
+	a nm:VETH ,
+	  owl:NamedIndividual ;
+	nm:connected ln:Archimedes_br0 .

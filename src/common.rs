@@ -1,4 +1,4 @@
-use std::{fs::File, sync::{Mutex, RwLock, Arc}, path::Path};
+use std::{fs::File, sync::Arc, path::Path};
 use std::io::{BufReader, Read, BufWriter};
 use futures::join;
 use actix::Message;
@@ -8,23 +8,22 @@ use regex::Regex;
 use reqwest::{Client, ClientBuilder, Proxy};
 use osm::common::OSMClient;
 use serde_json::Value;
-use swipl::prelude::Engine;
 use std::time::Instant;
 use serde::{Serialize, Deserialize};
 use serde_yaml;
-use sophia::{graph::{inmem::FastGraph, MutableGraph, Graph}, ns::*, term::{iri::Iri, TTerm, literal::{Literal, convert::DataType}, SimpleIri}, prefix::PrefixMap};
+use sophia::{graph::{inmem::FastGraph, MutableGraph, Graph}, ns::*, term::TTerm};
 use sophia::parser::{turtle, xml};
 use sophia::triple::stream::TripleSource;
 use sophia::serializer::{TripleSerializer,xml::RdfXmlSerializer, turtle::TurtleSerializer};
 use uuid::Uuid;
 use std::collections::HashMap;
-use log::{debug, error, info, Level, log_enabled};
+use log::{debug, info};// error, Level, log_enabled};
 
-use oxigraph::{store::Store, model::{NamedNode, GraphNameRef}, sparql::{QueryResultsFormat, QueryResults}, io::GraphFormat};
+use oxigraph::{store::Store, model::{NamedNode, GraphNameRef}, sparql::QueryResults, io::GraphFormat};
 use oxigraph::model::{Quad, GraphName};
 //use oxigraph::model::vocab::rdf;
 
-use crate::{stack, prolog, api::{self, sessions::SessionManager}, monitor};
+use crate::{stack, api::sessions::SessionManager, monitor};
 
 pub struct AppState {
     pub services: Vec<Service>,
@@ -221,7 +220,7 @@ pub async fn new_osm_to_triples(id: &str, client: &OSMClient) -> Option<Vec<Trip
     let store = Store::new().unwrap();
     let nm = "http://raw.githubusercontent.com/Guilvareux/ontologies/main/network/network#";
     let ln = "http://raw.githubusercontent.com/Guilvareux/ontologies/main/examples/tmf_example/live_network#";
-    let graphname = GraphName::DefaultGraph;
+    let _graphname = GraphName::DefaultGraph;
 
     store.insert(&Quad::new(
         fmt_prefix(ln, &nsr.name),
@@ -617,7 +616,7 @@ pub fn new_to_rdf(store: Store) -> Option<Vec<Triple>> {
                     let o = sol.get("o").unwrap().to_string();
                     triples.push(Triple { s, p, o });
                 },
-                Err(err) => return None,
+                Err(_err) => return None,
             }
         }
     }
@@ -749,4 +748,10 @@ pub fn parse_turtle(path: &Path) -> Result<FastGraph, OZError> {
         },
         Err(err) => panic!("{}", err),
     }
+}
+
+pub fn vec_to_vec(_in: Vec<&str>) -> Vec<String> {
+    let out: Vec<String>;
+    out = _in.iter().map(|s| s.to_string()).collect();
+    out
 }

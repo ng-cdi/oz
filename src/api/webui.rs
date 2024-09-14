@@ -1,18 +1,16 @@
-use std::{collections::HashMap, time::{Instant, Duration}, ops::DerefMut, sync::RwLock};
+use std::{time::{Instant, Duration}, sync::RwLock};
 
-use actix::{Actor, StreamHandler, Recipient, Message, AsyncContext, Running, Handler, ActorContext, Addr};
-use actix_web::{get, Responder, HttpResponse, HttpRequest, web::{Payload, Data, Bytes}};
-use actix_web_actors::ws::{self, Frame};
+use actix::{Actor, StreamHandler, Recipient, AsyncContext, Running, Handler, ActorContext};
+use actix_web::{HttpResponse, HttpRequest, web::{Payload, Data, Bytes}};
+use actix_web_actors::ws::{self};
 use log::{warn, info};
-use serde::Serialize;
 use serde_json::Value;
 use uuid::Uuid;
 
-use crate::common::{IntentStatus, AppState};
+use crate::common::AppState;
 use crate::prolog;
  
 use super::messages::WsMessage;
-use super::sessions::SessionManager;
 
 type Socket = Recipient<WsMessage>;
 

@@ -237,3 +237,7 @@ attach_valid_host([Device|Devices], Host) :-
 undo_attach_host(Variable, Host) :-
 	rdf(X, im:requires, Variable),
 	rdf_retractall(X, nm:isRunningOn, Host).
+
+create_slice(ID) :-
+	rdf_assert(ID, rdf:type, icm:'Intent'),
+	rdf_assert(ID, rdfs:comment, "TUDOR intent for ordering aslice"^^xsd:string).

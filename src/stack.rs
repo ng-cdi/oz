@@ -1,7 +1,6 @@
-use openstack::Cloud;
+//use openstack::Cloud;
 use openstack_reqwest::{Method, Url};
-use osauth::{common::IdOrName, client::AuthenticatedClient, EndpointFilters};
-use serde_json::Value;
+use osauth::{client::AuthenticatedClient, EndpointFilters};
 
 pub enum Compute {
     ListServers,
