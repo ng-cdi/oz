@@ -4,9 +4,11 @@ use bollard::secret::{DeviceMapping, HostConfig};
 use bollard::{container::{Config, CreateContainerOptions}, Docker, API_DEFAULT_VERSION};
 use futures::future::join_all;
 use futures::StreamExt;
+use lazy_static::lazy_static;
 use rand::distributions::Standard;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
+use regex::Regex;
 use reqwest::header::HeaderMap;
 use serde_yaml::Value;
 use std::collections::HashMap;
@@ -14,15 +16,18 @@ use std::fs::File;
 use std::io::BufReader;
 //use rtnetlink::{new_connection, LinkAddRequest};
 use std::process::Command;
+use std::time::Instant;
 
 use crate::common::{self};
-use crate::onos;
+use crate::onos::{self, add_host_intent};
 
 // Return this from container fgc 
 // then use for querying.
-pub struct Node<'a> {
-    name: &'a str,
-    mac_id: &'a str,
+
+#[derive(Debug, Clone)]
+pub struct Node {
+    name: String,
+    mac_id: String,
 }
 
 pub struct FGCContainerOptions<'a> {
@@ -45,12 +50,36 @@ pub struct MyContainerOptions<'a> {
     binds: Option<Vec<&'a str>>,
 }
 
+const ALL_HOSTS: [&str; 21] = [
+    "gnb1.free5gc.org:192.0.0.1",
+    "gnb2.free5gc.org:192.0.0.2",
+    "gnb3.free5gc.org:192.0.0.3",
+    "gnb4.free5gc.org:192.0.0.4",
+    "ue1.free5gc.org:192.0.0.5",
+    "upf.free5gc.org:192.0.0.6",
+    "nrf.free5gc.org:192.0.0.7",
+    "amf.free5gc.org:192.0.0.8",
+    "ausf.free5gc.org:192.0.0.9",
+    "nssf.free5gc.org:192.0.0.10",
+    "pcf.free5gc.org:192.0.0.11",
+    "smf.free5gc.org:192.0.0.12",
+    "udm.free5gc.org:192.0.0.13",
+    "udr.free5gc.org:192.0.0.14",
+    "chf.free5gc.org:192.0.0.15",
+    "n3iwf.free5gc.org:192.0.0.16",
+    "webui:192.0.0.17",
+    "db:192.0.0.18",
+    "n3ue.free5gc.org:192.0.0.19",
+    "upf1.free5gc.org:192.0.0.20",
+    "smf1.free5gc.org:192.0.0.21",
+];
+
 #[allow(unreachable_code)]
 pub async fn start_demo() {
 
     let compose = read_compose();
     //println!("{:?}", compose);
-    println!("{:?}", compose["services"]["free5gc-upf"]);
+    //println!("{:?}", compose["services"]["free5gc-upf"]);
     //return;
 
     //cleanup().await;
@@ -94,30 +123,8 @@ pub async fn start_demo() {
     connect_bridges("s13", "s14");
 
     let cert_dir = "/home/paul/projects/free5gc-compose/cert:/free5gc/cert";
-    let all_hosts: Vec<&str> = vec![
-        "gnb1.free5gc.org:192.0.0.1",
-        "gnb2.free5gc.org:192.0.0.2",
-        "gnb3.free5gc.org:192.0.0.3",
-        "gnb4.free5gc.org:192.0.0.4",
-        "upf.free5gc.org:192.0.0.5",
-        "db:192.0.0.6",
-        "nrf.free5gc.org:192.0.0.7",
-        "amf.free5gc.org:192.0.0.8",
-        "ausf.free5gc.org:192.0.0.9",
-        "nssf.free5gc.org:192.0.0.10",
-        "pcf.free5gc.org:192.0.0.11",
-        "smf.free5gc.org:192.0.0.12",
-        "udm.free5gc.org:192.0.0.13",
-        "udr.free5gc.org:192.0.0.14",
-        "chf.free5gc.org:192.0.0.15",
-        "n3iwf.free5gc.org:192.0.0.16",
-        "webui:192.0.0.17",
-        "n3ue.free5gc.org:192.0.0.18",
-    ];
-   
-    let upf = FGCContainerOptions {
+    let upf_conf = FGCContainerOptions {
         name: "upf",
-        //cmd: Some(vec!["tail", "-f", "/dev/null"]),
         cmd: Some(vec![
             "bash", 
             "-c",
@@ -126,109 +133,119 @@ pub async fn start_demo() {
         cap_add: Some(vec!["NET_ADMIN"]),
         binds: Some(vec![
             "/home/paul/projects/free5gc-compose/config/upf-iptables.sh:/free5gc/upf-iptables.sh",
+            "/home/paul/go-gtp5gnl:/free5gc/go-gtp5gnl",
         ]),
         env: None,
         devices: None,
-        extra_hosts: Some(all_hosts.clone()),
+        extra_hosts: Some(ALL_HOSTS.to_vec()),
     };
-    let db = MyContainerOptions {
+    let db_conf = MyContainerOptions {
         name: "mongodb",
         image: "docker.io/mongo:7.0.12-jammy",
         cmd: Some(vec!["mongod", "--port", "27017"]),
-        cap_add: None,
+        cap_add: Some(vec!["NET_ADMIN"]),
         binds: None,
         env: Some(vec!["DB_URI=mongodb://db/free5gc"]),
         devices: None,
     };
-    let nrf = FGCContainerOptions {
+    let webserver_conf = MyContainerOptions {
+        name: "webserver",
+        image: "webservice:latest",
+        cmd: None,
+        cap_add: Some(vec!["NET_ADMIN"]),
+        binds: None,
+        env: None,
+        devices: None,
+    };
+    let nrf_conf = FGCContainerOptions {
         name: "nrf",
         cmd: None,
-        cap_add: None,
+        cap_add: Some(vec!["NET_ADMIN"]),
         binds: Some(vec![cert_dir]),
         env: Some(vec!["DB_URI=mongodb://db/free5gc"]),
         devices: None,
-        extra_hosts: Some(all_hosts.clone()),
+        extra_hosts: Some(ALL_HOSTS.to_vec()),
     };
-    let amf = FGCContainerOptions {
+    let amf_conf = FGCContainerOptions {
         name: "amf",
         cmd: None,
-        cap_add: None,
+        cap_add: Some(vec!["NET_ADMIN"]),
         binds: Some(vec![cert_dir]),
         env: None,
         devices: None,
-        extra_hosts: Some(all_hosts.clone()),
+        extra_hosts: Some(ALL_HOSTS.to_vec()),
     };
-    let ausf = FGCContainerOptions {
+    let ausf_conf = FGCContainerOptions {
         name: "ausf",
         cmd: None,
-        cap_add: None,
+        cap_add: Some(vec!["NET_ADMIN"]),
         binds: Some(vec![cert_dir]),
         env: None,
         devices: None,
-        extra_hosts: Some(all_hosts.clone()),
+        extra_hosts: Some(ALL_HOSTS.to_vec()),
     };
-    let nssf = FGCContainerOptions {
+    let nssf_conf = FGCContainerOptions {
         name: "nssf",
         cmd: None,
-        cap_add: None,
+        cap_add: Some(vec!["NET_ADMIN"]),
         binds: Some(vec![cert_dir]),
         env: None,
         devices: None,
-        extra_hosts: Some(all_hosts.clone()),
+        extra_hosts: Some(ALL_HOSTS.to_vec()),
     };
-    let pcf = FGCContainerOptions {
+    let pcf_conf = FGCContainerOptions {
         name: "pcf",
         cmd: None,
-        cap_add: None,
+        cap_add: Some(vec!["NET_ADMIN"]),
         binds: Some(vec![cert_dir]),
         env: None,
         devices: None,
-        extra_hosts: Some(all_hosts.clone()),
+        extra_hosts: Some(ALL_HOSTS.to_vec()),
     };
-    let smf = FGCContainerOptions {
+    let smf_conf = FGCContainerOptions {
         name: "smf",
         cmd: Some(vec![
             "sh",
             "-c",
             "sleep 25s && ./smf -c ./config/smfcfg.yaml -u ./config/uerouting.yaml"
         ]),
-        cap_add: None,
+        cap_add: Some(vec!["NET_ADMIN"]),
         binds: Some(vec![
             "/home/paul/projects/free5gc-compose/config/uerouting.yaml:/free5gc/config/uerouting.yaml",
             cert_dir
         ]),
         env: None,
         devices: None,
-        extra_hosts: Some(all_hosts.clone()),
+        extra_hosts: Some(ALL_HOSTS.to_vec()),
     };
-    let udm = FGCContainerOptions {
+    let udm_conf = FGCContainerOptions {
         name: "udm",
         cmd: None,
-        cap_add: None,
+        cap_add: Some(vec!["NET_ADMIN"]),
         binds: Some(vec![cert_dir]),
         env: None,
         devices: None,
-        extra_hosts: Some(all_hosts.clone()),
+        extra_hosts: Some(ALL_HOSTS.to_vec()),
     };
-    let udr = FGCContainerOptions {
+    let udr_conf = FGCContainerOptions {
         name: "udr",
         cmd: None,
-        cap_add: None,
+        cap_add: Some(vec!["NET_ADMIN"]),
         binds: Some(vec![cert_dir]),
         env: Some(vec!["DB_URI=mongodb://db/free5gc"]),
         devices: None,
-        extra_hosts: Some(all_hosts.clone()),
+        extra_hosts: Some(ALL_HOSTS.to_vec()),
     };
-    let chf = FGCContainerOptions {
+    let chf_conf = FGCContainerOptions {
         name: "chf",
         cmd: None,
-        cap_add: None,
+        cap_add: Some(vec!["NET_ADMIN"]),
         binds: Some(vec![cert_dir]),
         env: Some(vec!["DB_URI=mongodb://db/free5gc"]),
         devices: None,
-        extra_hosts: Some(all_hosts.clone()),
+        extra_hosts: Some(ALL_HOSTS.to_vec()),
     };
-    let n3iwf = FGCContainerOptions {
+    let n3iwf_conf = FGCContainerOptions {
         name: "n3iwf",
         cmd: Some(vec![
             "sh", 
@@ -242,18 +259,18 @@ pub async fn start_demo() {
         ]),
         env: None,
         devices: None,
-        extra_hosts: Some(all_hosts.clone()),
+        extra_hosts: Some(ALL_HOSTS.to_vec()),
     };
-    let webui = FGCContainerOptions {
+    let webui_conf = FGCContainerOptions {
         name: "webui",
         cmd: None,
-        cap_add: None,
+        cap_add: Some(vec!["NET_ADMIN"]),
         binds: None,
         env: None,
         devices: None,
-        extra_hosts: Some(all_hosts.clone()),
+        extra_hosts: Some(ALL_HOSTS.to_vec()),
     };
-    let n3iwue = FGCContainerOptions {
+    let n3iwue_conf = FGCContainerOptions {
         name: "n3iwue",
         cmd: Some(vec!["sleep", "infinity"]),
         cap_add: Some(vec!["NET_ADMIN"]),
@@ -264,48 +281,66 @@ pub async fn start_demo() {
             path_in_container: Some("/dev/net/tun".to_string()),
             cgroup_permissions: Some("rw".to_string()),
         }]),
-        extra_hosts: Some(all_hosts.clone()),
+        extra_hosts: Some(ALL_HOSTS.to_vec()),
     };
-    add_container_fgc(upf,      "s3", "192.0.0.5/24").await;
-    add_container(db,           "s3", "192.0.0.6/24").await;
-    add_container_fgc(nrf,      "s3", "192.0.0.7/24").await;
-    add_container_fgc(amf,      "s3", "192.0.0.8/24").await;
-    add_container_fgc(ausf,     "s3", "192.0.0.9/24").await;
-    add_container_fgc(nssf,     "s3", "192.0.0.10/24").await;
-    add_container_fgc(pcf,      "s3", "192.0.0.11/24").await;
-    add_container_fgc(smf,      "s3", "192.0.0.12/24").await;
-    add_container_fgc(udm,      "s3", "192.0.0.13/24").await;
-    add_container_fgc(udr,      "s3", "192.0.0.14/24").await;
-    add_container_fgc(chf,      "s3", "192.0.0.15/24").await;
-    add_container_fgc(n3iwf,    "s3", "192.0.0.16/24").await;
-    add_container_fgc(webui,    "s3", "192.0.0.17/24").await;
-    add_container_fgc(n3iwue,   "s3", "192.0.0.18/24").await;
+
+    let upf = add_container_fgc(upf_conf,       "s3", "192.0.0.6/24").await;
+    let db = add_container(db_conf,             "s3", "192.0.0.18/24").await;
+    //situation_test().await;
+    let nrf = add_container_fgc(nrf_conf,       "s3", "192.0.0.7/24").await;
+    let amf = add_container_fgc(amf_conf,       "s3", "192.0.0.8/24").await;
+    let ausf = add_container_fgc(ausf_conf,     "s3", "192.0.0.9/24").await;
+    let nssf = add_container_fgc(nssf_conf,     "s3", "192.0.0.10/24").await;
+    let pcf = add_container_fgc(pcf_conf,       "s3", "192.0.0.11/24").await;
+    let smf = add_container_fgc(smf_conf,       "s3", "192.0.0.12/24").await;
+    let udm = add_container_fgc(udm_conf,       "s3", "192.0.0.13/24").await;
+    let udr = add_container_fgc(udr_conf,       "s3", "192.0.0.14/24").await;
+    let chf = add_container_fgc(chf_conf,       "s3", "192.0.0.15/24").await;
+    let n3iwf = add_container_fgc(n3iwf_conf,   "s3", "192.0.0.16/24").await;
+    let webui = add_container_fgc(webui_conf,   "s3", "192.0.0.17/24").await;
+    let n3iwue = add_container_fgc(n3iwue_conf, "s3", "192.0.0.19/24").await;
+    let webserver = add_container(webserver_conf, "s3", "192.0.0.252/24").await;
+    //let webserver = add_container(webserver_conf, "s3", "10.60.0.90/24").await;
     /*
-    let mut futures = Vec::new();
-    futures.push(add_container_fgc(upf,      "s3", "192.0.0.5/24",  "192.0.0.19/24"));
-    futures.push(add_container_fgc(nrf,      "s3", "192.0.0.7/24",  "192.0.0.21/24"));
-    futures.push(add_container_fgc(amf,      "s3", "192.0.0.8/24",  "192.0.0.22/24"));
-    futures.push(add_container_fgc(ausf,     "s3", "192.0.0.9/24",  "192.0.0.23/24"));
-    futures.push(add_container_fgc(nssf,     "s3", "192.0.0.10/24",  "192.0.0.24/24"));
-    futures.push(add_container_fgc(pcf,      "s3", "192.0.0.11/24",  "192.0.0.25/24"));
-    futures.push(add_container_fgc(smf,      "s3", "192.0.0.12/24",  "192.0.0.26/24"));
-    futures.push(add_container_fgc(udm,      "s3", "192.0.0.13/24",  "192.0.0.27/24"));
-    futures.push(add_container_fgc(udr,      "s3", "192.0.0.14/24", "192.0.0.28/24"));
-    futures.push(add_container_fgc(chf,      "s3", "192.0.0.15/24", "192.0.0.29/24"));
-    futures.push(add_container_fgc(n3iwf,    "s3", "192.0.0.16/24", "192.0.0.30/24"));
-    futures.push(add_container_fgc(webui,    "s3", "192.0.0.17/24", "192.0.0.31/24"));
-    futures.push(add_container_fgc(n3iwue,   "s3", "192.0.0.18/24", "192.0.0.32/24"));
-    join_all(futures).await;
+    add_veth("sstm", "ssts");
+    add_veth_ovs("s3", "ssts");
+    let pid = get_pid("webserver").await.unwrap();
+    add_veth_container("sstm", pid);
+    tokio::time::sleep(tokio::time::Duration::from_secs(6)).await;
+    assign_container_ip("sstm", "10.61.0.90/24", "webserver").await;
     */
 
-    ueransim_fleet(all_hosts).await;
+    let mut nodes: Vec<String> = Vec::new();
+    nodes.push(upf.mac_id);
+    nodes.push(db.mac_id);
+    nodes.push(nrf.mac_id);
+    nodes.push(amf.mac_id);
+    nodes.push(ausf.mac_id); 
+    nodes.push(nssf.mac_id); 
+    nodes.push(pcf.mac_id);
+    nodes.push(smf.mac_id);
+    nodes.push(udm.mac_id);
+    nodes.push(udr.mac_id);
+    nodes.push(chf.mac_id);
+    nodes.push(n3iwf.mac_id);
+    nodes.push(webui.mac_id);
+    nodes.push(n3iwue.mac_id);
+    nodes.push(webserver.mac_id);
+    
+    ueransim_fleet(ALL_HOSTS.to_vec()).await;
 
     for i in 1..=14 {
         let bridge_name = format!("s{}", i);
         set_bridge_ports(&bridge_name, &mut next_ip);
     }
 
-    add_veth_ovs("s3", "hosts");
+    //add_veth_ovs("s3", "hosts");
+
+    //let nodes_copy = nodes.clone();
+    //let first = nodes_copy.first().unwrap();
+    //let _ = nodes.pop().unwrap();
+    //recursive_add_host(nodes, first.to_string()).await;
+
     /*
     for i in 0..2 {
         add_subscriber(i).await;
@@ -313,6 +348,45 @@ pub async fn start_demo() {
     get_hosts().await;
     */
 }
+
+pub async fn add_host_intents(nodes: Vec<String>) {
+    for i in 0..nodes.len() {
+        let first_id = format!("{}/None", nodes[i]);
+        let num = i+1;
+        for j in num..nodes.len() {
+            let second_id = format!("{}/None", nodes[j]);
+            onos::add_host_intent(first_id.as_str(), second_id.as_str(), Some("192.0.0.0/24")).await;
+            onos::add_host_intent(first_id.as_str(), second_id.as_str(), Some("10.60.0.0/24")).await;
+            onos::add_host_intent(first_id.as_str(), second_id.as_str(), Some("10.61.0.0/24")).await;
+            //onos::add_host_intent(first_id.as_str(), second_id.as_str(), None).await;
+        }        
+    }
+}
+
+/*
+pub async fn recursive_add_host(nodes: Vec<String>, first: String) {
+    println!("{}", first);
+    println!("{:?}", nodes);
+    let _ = Box::pin(async move {
+        for i in nodes {
+            if let Some(second) = i {
+
+            }
+        }
+        if let Some(second) = nodes.first() {
+            let first_id = format!("{}/None", first);
+            let second_id = format!("{}/None", second);
+            for i in nodes {
+                onos::add_host_intent(first_id.as_str(), second_id.as_str()).await;
+            }
+            let other_nodes = &nodes[1..nodes.len()];
+            recursive_add_host(other_nodes.to_vec(), first).await;
+        }
+    });
+
+    return
+}
+*/
 
 pub async fn cleanup() {
     let containers: Vec<&str> = vec![
@@ -328,12 +402,14 @@ pub async fn cleanup() {
         "chf",
         "n3iwf",
         "webui",
+        "webserver",
         "n3iwue",
         "mongodb",
         "ueransim1",
         "ueransim2",
         "ueransim3",
         "ueransim4",
+        "ueransim5",
     ];
     let docker = default_connect();
     let mut futs = Vec::new();
@@ -350,44 +426,168 @@ pub async fn cleanup() {
         del_bridge(format!("s{}", i).as_str());
     }
     delete_bridge_connections();
+    //onos::flush_intents().await;
 }
 
-async fn situation(all_hosts: Vec<&str>) {
+pub async fn situation_test() {
     let cert_dir = "/home/paul/projects/free5gc-compose/cert:/free5gc/cert";
     let upf = FGCContainerOptions {
         name: "upf1",
-        //cmd: Some(vec!["tail", "-f", "/dev/null"]),
         cmd: Some(vec![
             "bash", 
             "-c",
-            "sleep 25s && ./upf-iptables.sh && ./upf -c ./config/upfcfg.yaml"
+            "sleep 25s && ./upf-iptables.sh && ./upf -c ./config/upfcfg1.yaml"
         ]),
         cap_add: Some(vec!["NET_ADMIN"]),
         binds: Some(vec![
             "/home/paul/projects/free5gc-compose/config/upf-iptables.sh:/free5gc/upf-iptables.sh",
+            "/home/paul/projects/free5gc-compose/config/upfcfg1.yaml:/free5gc/config/upfcfg1.yaml",
         ]),
         env: None,
         devices: None,
-        extra_hosts: Some(all_hosts.clone()),
+        extra_hosts: Some(ALL_HOSTS.to_vec()),
     };
     let smf = FGCContainerOptions {
         name: "smf1",
         cmd: Some(vec![
             "sh",
             "-c",
-            "sleep 25s && ./smf -c ./config/smfcfg.yaml -u ./config/uerouting.yaml"
+            "sleep 25s && ./smf -c ./config/smfcfg1.yaml -u ./config/uerouting.yaml"
         ]),
         cap_add: None,
         binds: Some(vec![
             "/home/paul/projects/free5gc-compose/config/uerouting.yaml:/free5gc/config/uerouting.yaml",
+            "/home/paul/projects/free5gc-compose/config/smfcfg1.yaml:/free5gc/config/smfcfg1.yaml",
             cert_dir
         ]),
         env: None,
         devices: None,
-        extra_hosts: Some(all_hosts.clone()),
+        extra_hosts: Some(ALL_HOSTS.to_vec()),
     };
-    add_container_fgc(upf,      "s3", "192.0.0.19/24").await;
-    add_container_fgc(smf,      "s3", "192.0.0.20/24").await;
+    add_container_fgc(upf,      "s3", "192.0.0.20/24").await;
+    add_container_fgc(smf,      "s3", "192.0.0.21/24").await;
+}
+
+pub async fn situation() {
+    let now = Instant::now();
+    let cert_dir = "/home/paul/projects/free5gc-compose/cert:/free5gc/cert";
+    let upf = FGCContainerOptions {
+        name: "upf1",
+        cmd: Some(vec![
+            "bash", 
+            "-c",
+            "sleep 25s && ./upf-iptables.sh && ./upf -c ./config/upfcfg1.yaml"
+        ]),
+        cap_add: Some(vec!["NET_ADMIN"]),
+        binds: Some(vec![
+            "/home/paul/projects/free5gc-compose/config/upf-iptables.sh:/free5gc/upf-iptables.sh",
+            "/home/paul/projects/free5gc-compose/config/upfcfg1.yaml:/free5gc/config/upfcfg1.yaml",
+            "/home/paul/go-gtp5gnl:/free5gc/go-gtp5gnl",
+        ]),
+        env: None,
+        devices: None,
+        extra_hosts: Some(ALL_HOSTS.to_vec()),
+    };
+    let smf = FGCContainerOptions {
+        name: "smf1",
+        cmd: Some(vec![
+            "sh",
+            "-c",
+            "sleep 25s && ./smf -c ./config/smfcfg1.yaml -u ./config/uerouting.yaml"
+        ]),
+        cap_add: None,
+        binds: Some(vec![
+            "/home/paul/projects/free5gc-compose/config/uerouting.yaml:/free5gc/config/uerouting.yaml",
+            "/home/paul/projects/free5gc-compose/config/smfcfg1.yaml:/free5gc/config/smfcfg1.yaml",
+            cert_dir
+        ]),
+        env: None,
+        devices: None,
+        extra_hosts: Some(ALL_HOSTS.to_vec()),
+    };
+    add_container_fgc(upf,      "s3", "192.0.0.20/24").await;
+    add_container_fgc(smf,      "s3", "192.0.0.21/24").await;
+
+    let upf = get_container_mac("upf1").await;
+    let smf = get_container_mac("smf1").await;
+    match (upf, smf) {
+        (Some(upf_m), Some(smf_m)) => {
+            let mut nodes: Vec<String> = Vec::new();
+            temp_test("db".to_string(), &mut nodes).await;
+            temp_test("nrf".to_string(), &mut nodes).await;
+            temp_test("amf".to_string(), &mut nodes).await;
+            temp_test("ausf".to_string(), &mut nodes).await; 
+            temp_test("nssf".to_string(), &mut nodes).await;
+            temp_test("pcf".to_string(), &mut nodes).await;
+            temp_test("udm".to_string(), &mut nodes).await;
+            temp_test("udr".to_string(), &mut nodes).await;
+            temp_test("chf".to_string(), &mut nodes).await;
+            temp_test("n3iwf".to_string(), &mut nodes).await;
+            temp_test("webui".to_string(), &mut nodes).await;
+            temp_test("n3iwue".to_string(), &mut nodes).await;
+            temp_test("webserver".to_string(), &mut nodes).await;
+            temp_test("ueransim1".to_string(), &mut nodes).await;
+            temp_test("ueransim2".to_string(), &mut nodes).await;
+            temp_test("ueransim3".to_string(), &mut nodes).await;
+            temp_test("ueransim4".to_string(), &mut nodes).await;
+            temp_test("ueransim5".to_string(), &mut nodes).await;
+            for i in nodes.iter() {
+                let upf_s = format!("{}/None", upf_m);
+                let smf_s = format!("{}/None", smf_m);
+                let i_s = format!("{}/None", i);
+                add_host_intent(upf_s.as_str(), i_s.as_str(), Some("192.0.0.0/24")).await;
+                add_host_intent(smf_s.as_str(), i_s.as_str(), Some("192.0.0.0/24")).await;
+                add_host_intent(upf_s.as_str(), i_s.as_str(), Some("10.60.0.0/24")).await;
+                add_host_intent(smf_s.as_str(), i_s.as_str(), Some("10.60.0.0/24")).await;
+                add_host_intent(upf_s.as_str(), i_s.as_str(), Some("10.61.0.0/24")).await;
+                add_host_intent(smf_s.as_str(), i_s.as_str(), Some("10.61.0.0/24")).await;
+            }
+
+            /*
+            let ueransim1 = get_container_mac("ueransim1").await.unwrap();
+            let ueransim2 = get_container_mac("ueransim2").await.unwrap();
+            let ueransim3 = get_container_mac("ueransim3").await.unwrap();
+            let ueransim4 = get_container_mac("ueransim4").await.unwrap();
+
+            let f_upf = format!("{}/None", upf_m);
+            let f_smf = format!("{}/None", smf_m);
+            let f_ue1 = format!("{}/None", ueransim1);
+            let f_ue2 = format!("{}/None", ueransim2);
+            let f_ue3 = format!("{}/None", ueransim3);
+            let f_ue4 = format!("{}/None", ueransim4);
+
+            // Slice specifics
+            onos::add_host_intent(f_upf.clone().as_str(), f_ue1.as_str(), Some("192.0.0.0/24")).await;
+            onos::add_host_intent(f_upf.clone().as_str(), f_ue2.as_str(), Some("192.0.0.0/24")).await;
+            onos::add_host_intent(f_upf.clone().as_str(), f_ue3.as_str(), Some("192.0.0.0/24")).await;
+            onos::add_host_intent(f_upf.clone().as_str(), f_ue4.as_str(), Some("192.0.0.0/24")).await;
+            onos::add_host_intent(f_upf.clone().as_str(), f_ue1.as_str(), Some("10.60.0.0/24")).await;
+            onos::add_host_intent(f_upf.clone().as_str(), f_ue2.as_str(), Some("10.60.0.0/24")).await;
+            onos::add_host_intent(f_upf.clone().as_str(), f_ue3.as_str(), Some("10.60.0.0/24")).await;
+            onos::add_host_intent(f_upf.clone().as_str(), f_ue4.as_str(), Some("10.60.0.0/24")).await;
+            onos::add_host_intent(f_upf.clone().as_str(), f_ue1.as_str(), Some("10.61.0.0/24")).await;
+            onos::add_host_intent(f_upf.clone().as_str(), f_ue2.as_str(), Some("10.61.0.0/24")).await;
+            onos::add_host_intent(f_upf.clone().as_str(), f_ue3.as_str(), Some("10.61.0.0/24")).await;
+            onos::add_host_intent(f_upf.clone().as_str(), f_ue4.as_str(), Some("10.61.0.0/24")).await;
+            onos::add_host_intent(f_smf.clone().as_str(), f_ue1.as_str(), Some("192.0.0.0/24")).await;
+            onos::add_host_intent(f_smf.clone().as_str(), f_ue2.as_str(), Some("192.0.0.0/24")).await;
+            onos::add_host_intent(f_smf.clone().as_str(), f_ue3.as_str(), Some("192.0.0.0/24")).await;
+            onos::add_host_intent(f_smf.clone().as_str(), f_ue4.as_str(), Some("192.0.0.0/24")).await;
+            onos::add_host_intent(f_smf.clone().as_str(), f_ue1.as_str(), Some("10.60.0.0/24")).await;
+            onos::add_host_intent(f_smf.clone().as_str(), f_ue2.as_str(), Some("10.60.0.0/24")).await;
+            onos::add_host_intent(f_smf.clone().as_str(), f_ue3.as_str(), Some("10.60.0.0/24")).await;
+            onos::add_host_intent(f_smf.clone().as_str(), f_ue4.as_str(), Some("10.60.0.0/24")).await;
+            onos::add_host_intent(f_smf.clone().as_str(), f_ue1.as_str(), Some("10.61.0.0/24")).await;
+            onos::add_host_intent(f_smf.clone().as_str(), f_ue2.as_str(), Some("10.61.0.0/24")).await;
+            onos::add_host_intent(f_smf.clone().as_str(), f_ue3.as_str(), Some("10.61.0.0/24")).await;
+            onos::add_host_intent(f_smf.clone().as_str(), f_ue4.as_str(), Some("10.61.0.0/24")).await;
+            */
+        },
+        _ => println!("Situation: Upf not up"),
+    }
+
+    let elapsed_time = now.elapsed();
+    println!("Done: {}ms", elapsed_time.as_millis());
 }
 
 fn assign_ip(intf: &str, cidr: &str) {
@@ -398,7 +598,12 @@ fn assign_ip(intf: &str, cidr: &str) {
     //println!("{}", String::from_utf8_lossy(&output.stdout));
 }
 
-async fn get_container_mac(name: &str) {
+async fn get_container_mac(name: &str) -> Option<String> {
+
+    lazy_static!{
+        static ref RE: Regex = Regex::new(r"link\/ether ([\d\w]{2}\:[\d\w]{2}\:[\d\w]{2}\:[\d\w]{2}\:[\w\d]{2}\:[\w\d]{2})").unwrap();
+    }
+
     let docker = default_connect();
     let res = docker.create_exec(name, bollard::exec::CreateExecOptions { 
         privileged: Some(true),
@@ -412,16 +617,28 @@ async fn get_container_mac(name: &str) {
         ]), 
         ..Default::default()
     }).await;
-    if let StartExecResults::Attached{ mut output, ..} = docker.start_exec(&res.unwrap().id, Some(StartExecOptions { 
-        tty: true, 
-        ..Default::default()
-    })).await.unwrap() {
-        while let Some(Ok(msg)) = output.next().await {
-            print!("AIC: {msg}");
+    if let Ok(ok_res) = res {
+        let mut result = String::new();
+        if let StartExecResults::Attached{ mut output, ..} = docker.start_exec(&ok_res.id, Some(StartExecOptions { 
+            tty: true, 
+            ..Default::default()
+        })).await.unwrap() {
+            while let Some(Ok(msg)) = output.next().await {
+                result.push_str(msg.to_string().as_str());
+                //print!("AIC: {msg}");
+            }
+        } else {
+            unreachable!();
         }
-    } else {
-        unreachable!();
+
+        let cap_term = RE.captures(&result);
+        if let Some(cap) = cap_term {
+            if let Some(mac) = cap.get(1) {
+                return Some(mac.as_str().to_string());
+            }
+        }
     }
+    return None 
 }
 
 async fn assign_container_ip(intf: &str, cidr: &str, name: &str) {
@@ -645,6 +862,13 @@ fn delete_bridge_connections() {
     }
 }
 
+fn wipe_ovsdb() {
+    let _output = Command::new("ovs-vsctl")
+        .args(&["emer-reset"])
+        .output()
+        .expect("Failed to execute command");
+}
+
 fn default_connect() -> Docker {
     //Docker::connect_with_unix("/run/user/1000/podman/podman.sock", 120, API_DEFAULT_VERSION).unwrap()
     Docker::connect_with_unix("/run/docker.sock", 120, API_DEFAULT_VERSION).unwrap()
@@ -660,7 +884,7 @@ async fn get_pid(name: &str) -> Option<i64>{
 }
 
 async fn ueransim_fleet(hosts: Vec<&str>) {
-    for i in 1..=4 {
+    for i in 1..=5 {
         let name = format!("ueransim{}", i);
         let oci_ip = format!("192.0.0.{i}/24");
         let ueransim_veth1 = format!("ue{i}1");
@@ -670,9 +894,8 @@ async fn ueransim_fleet(hosts: Vec<&str>) {
         //let o = format!("gnb.free5gc.org:{}", &strip_ip);
         //hosts.push(o.as_str());
 
-        //let mut is_ue = false;
-        //if i == 1 { is_ue = true; }
-        let is_ue = true;
+        let mut is_ue = false;
+        if i == 5 { is_ue = true; }
         add_ueransim(i, hosts, is_ue).await;
         tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
         //let ueransim_veth2 = format!("ue{i}2");
@@ -706,19 +929,25 @@ async fn add_ueransim(num: u8, hosts: Vec<&str>, is_ue: bool) {
                 format!("/home/paul/projects/free5gc-compose/config/gnb/gnb{}cfg.yaml:/ueransim/config/gnbcfg.yaml", num),
     ];
     match is_ue {
-        //true => d_binds.push("/home/paul/projects/free5gc-compose/config/uecfg.yaml:/ueransim/config/uecfg.yaml".to_string()),
         true => d_binds.push("/home/paul/projects/free5gc-compose/config/ue:/ueransim/config/ue".to_string()),
         false => (), 
     }
-    let ransim_config = Config {
-        image: Some("docker.io/free5gc/ueransim:v3.4.1"),
-        // Remember: Needs valid interface on startup
-        cmd: Some(vec![
+    let cmd_str = match is_ue {
+        false => Some(vec![
             "sh",
             "-c",
             "sleep 25s && ./nr-gnb -c ./config/gnbcfg.yaml"
         ]),
-        //cmd: Some(vec!["tail", "-f", "/dev/null"]),
+        true => Some(vec![
+            "sh",
+            "-c",
+            "sleep infinity"
+        ]),
+    };
+    let ransim_config = Config {
+        image: Some("docker.io/free5gc/ueransim:v3.4.1"),
+        // Remember: Needs valid interface on startup
+        cmd: cmd_str,
         host_config: Some(HostConfig{
             cap_add: Some(vec!["NET_ADMIN".to_string()]),
             devices: Some(vec![DeviceMapping{
@@ -733,7 +962,6 @@ async fn add_ueransim(num: u8, hosts: Vec<&str>, is_ue: bool) {
         }),
         ..Default::default()
     };
-    //let _ = docker.create_container(ransim_options, ransim_config).await;
     match docker.create_container(ransim_options, ransim_config).await {
         Ok(o) => println!("{} started\n{:?}", name, o),
         Err(e) => println!("{} error\n{:?}", name, e),
@@ -741,9 +969,14 @@ async fn add_ueransim(num: u8, hosts: Vec<&str>, is_ue: bool) {
     let _ = docker.start_container(&name, None::<StartContainerOptions<String>>).await;
 }
 
-async fn add_container_fgc<'a>(opts: FGCContainerOptions<'a>, switch: &str, oci_ip: &str) {
+async fn add_container_fgc<'a>(opts: FGCContainerOptions<'a>, switch: &str, oci_ip: &str) -> Node {
     let docker = default_connect();    
     let name = opts.name.to_string();
+    let image_name: String = match name.as_str() {
+        "n3iwue" => "n3iwue".to_string(),
+        "n3iwf" => "n3iwf".to_string(),
+        _ => opts.name.chars().filter(|c| c.is_alphabetic()).collect(),
+    };
     let ransim_options = Some(CreateContainerOptions {
         name,
         platform: None
@@ -759,7 +992,6 @@ async fn add_container_fgc<'a>(opts: FGCContainerOptions<'a>, switch: &str, oci_
         ];
             let mut oldvec: Vec<String> = common::vec_to_vec(ca);
             newvec.append(&mut oldvec);
-            //Some(common::vec_to_vec(ca)),
             Some(newvec)
         },
         None => {
@@ -770,7 +1002,6 @@ async fn add_container_fgc<'a>(opts: FGCContainerOptions<'a>, switch: &str, oci_
     let e_cmd = match opts.cmd {
         Some(ca) => Some(common::vec_to_vec(ca)),
         None => {
-            //let newvec: Vec<String> = common::vec_to_vec(vec!["tail", "-f", "/dev/null"]);
             let newvec: Vec<String> = vec![
                 "sh".to_string(), 
                 "-c".to_string(),
@@ -811,7 +1042,7 @@ async fn add_container_fgc<'a>(opts: FGCContainerOptions<'a>, switch: &str, oci_
     };
     */
     let ransim_config = Config {
-        image: Some(format!("docker.io/free5gc/{}:v3.4.1", opts.name)),
+        image: Some(format!("docker.io/free5gc/{}:v3.4.1", image_name)),
         cmd: e_cmd,
         env: e_env,
         host_config: Some(HostConfig{
@@ -833,7 +1064,6 @@ async fn add_container_fgc<'a>(opts: FGCContainerOptions<'a>, switch: &str, oci_
     let oci_veth = "eth0";
     add_veth(&ovs_veth, oci_veth);
     add_veth_ovs(switch, &ovs_veth);
-    //assign_ip(&ovs_veth, oci_ip);
     tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
     let pid = get_pid(&opts.name).await.unwrap();
     tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
@@ -841,9 +1071,16 @@ async fn add_container_fgc<'a>(opts: FGCContainerOptions<'a>, switch: &str, oci_
     assign_container_ip(oci_veth, oci_ip, opts.name).await;
     set_veth_up(&ovs_veth);
     set_veth_up_oci(&oci_veth, opts.name).await;
+    let mac_addr = get_container_mac(opts.name).await.unwrap();
+    let node = Node{
+        name: opts.name.to_string(),
+        mac_id: mac_addr, 
+    };
+
+    node
 }
 
-async fn add_container<'a>(opts: MyContainerOptions<'a>, switch: &str, oci_ip: &str) {
+async fn add_container<'a>(opts: MyContainerOptions<'a>, switch: &str, oci_ip: &str) -> Node {
     let docker = default_connect();    
     let name = opts.name.to_string();
     let ransim_options = Some(CreateContainerOptions {
@@ -890,7 +1127,6 @@ async fn add_container<'a>(opts: MyContainerOptions<'a>, switch: &str, oci_ip: &
     let oci_veth = "eth0";
     add_veth(&ovs_veth, oci_veth);
     add_veth_ovs(switch, &ovs_veth);
-    //assign_ip(&ovs_veth, oci_ip);
     tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
     let pid = get_pid(&opts.name).await.unwrap();
     add_veth_container(&oci_veth, pid);
@@ -898,6 +1134,14 @@ async fn add_container<'a>(opts: MyContainerOptions<'a>, switch: &str, oci_ip: &
     assign_container_ip(oci_veth, oci_ip, opts.name).await;
     set_veth_up(&ovs_veth);
     set_veth_up_oci(&oci_veth, opts.name).await;
+
+    let mac_addr = get_container_mac(opts.name).await;
+    let node = Node{
+        name: opts.name.to_string(),
+        mac_id: mac_addr.unwrap(), 
+    };
+
+    node
 }
 
 fn remove_address(name: &str, hosts: &mut Vec<String>) {
@@ -934,10 +1178,13 @@ fn read_compose() -> Value {
 }
 
 pub async fn add_subscriber(num: u8) {
-    let sub = File::open("./5g/subscriber.json").unwrap();
+    //let sub = File::open("./5g/subscriber.json").unwrap();
+    let sub = match num {
+        3 => File::open("./5g/subscriber-limit.json").unwrap(),
+        _ => File::open("./5g/subscriber.json").unwrap(),
+    };
     let sub_rdr = BufReader::new(sub);
     let mut req_json: Value = serde_json::from_reader(sub_rdr).unwrap();
-   
     let client = reqwest::Client::new();
     let mut headers = HeaderMap::new();
     headers.insert("Accept", "application/json".parse().unwrap());
@@ -1044,7 +1291,15 @@ fn json_to_bollard(val: Value, extra_hosts: Vec<String>) -> Config<String> {
     oci_config
 } 
 
+pub async fn temp_test(container: String, nodes: &mut Vec<String>) {
+    match get_container_mac(&container).await {
+        Some(s) => nodes.push(s),
+        None => return
+    }
+}
+
 pub async fn test() {
+    /*
     let id = onos::get_switch_id("s3").await;
     let res = match id {
         Some(d) => onos::get_switch_ports(d).await,
@@ -1052,4 +1307,79 @@ pub async fn test() {
     };
     println!("{:?}", res);
     onos::get_hosts().await;
+
+    println!("GET CONTAINER");
+    let s = get_container_mac("chf").await;
+    println!("{}", s);
+    */
+
+    let mut nodes: Vec<String> = Vec::new();
+    temp_test("upf".to_string(), &mut nodes).await;
+    temp_test("db".to_string(), &mut nodes).await;
+    temp_test("nrf".to_string(), &mut nodes).await;
+    temp_test("amf".to_string(), &mut nodes).await;
+    temp_test("ausf".to_string(), &mut nodes).await; 
+    temp_test("nssf".to_string(), &mut nodes).await;
+    temp_test("pcf".to_string(), &mut nodes).await;
+    temp_test("smf".to_string(), &mut nodes).await;
+    temp_test("udm".to_string(), &mut nodes).await;
+    temp_test("udr".to_string(), &mut nodes).await;
+    temp_test("chf".to_string(), &mut nodes).await;
+    temp_test("n3iwf".to_string(), &mut nodes).await;
+    temp_test("webui".to_string(), &mut nodes).await;
+    temp_test("n3iwue".to_string(), &mut nodes).await;
+    temp_test("webserver".to_string(), &mut nodes).await;
+    temp_test("ueransim1".to_string(), &mut nodes).await;
+    temp_test("ueransim2".to_string(), &mut nodes).await;
+    temp_test("ueransim3".to_string(), &mut nodes).await;
+    temp_test("ueransim4".to_string(), &mut nodes).await;
+    temp_test("ueransim5".to_string(), &mut nodes).await;
+
+    let nodes_copy = nodes.clone();
+    //let first = nodes_copy.first().unwrap();
+    //let _ = nodes.pop().unwrap();
+    //recursive_add_host(nodes, first.to_string()).await;
+    
+    onos::flush_intents().await;
+    add_host_intents(nodes_copy).await;
+    /*
+    let upf = get_container_mac("upf").await;
+    match upf {
+        Some(addr) => {
+            let ueransim1 = get_container_mac("ueransim1").await.unwrap();
+            let ueransim2 = get_container_mac("ueransim2").await.unwrap();
+            let ueransim3 = get_container_mac("ueransim3").await.unwrap();
+            let ueransim4 = get_container_mac("ueransim4").await.unwrap();
+
+            let f_addr = format!("{}/None", addr);
+            let f_ue1 = format!("{}/None", ueransim1);
+            let f_ue2 = format!("{}/None", ueransim2);
+            let f_ue3 = format!("{}/None", ueransim3);
+            let f_ue4 = format!("{}/None", ueransim4);
+            // Non-slice specific
+            
+            // Slice specifics
+            onos::add_host_intent(f_addr.clone().as_str(), f_ue1.as_str(), Some("10.60.0.0/24")).await;
+            onos::add_host_intent(f_addr.clone().as_str(), f_ue2.as_str(), Some("10.60.0.0/24")).await;
+            onos::add_host_intent(f_addr.clone().as_str(), f_ue3.as_str(), Some("10.60.0.0/24")).await;
+            onos::add_host_intent(f_addr.clone().as_str(), f_ue4.as_str(), Some("10.60.0.0/24")).await;
+            onos::add_host_intent(f_addr.clone().as_str(), f_ue1.as_str(), Some("192.0.0.0/24")).await;
+            onos::add_host_intent(f_addr.clone().as_str(), f_ue2.as_str(), Some("192.0.0.0/24")).await;
+            onos::add_host_intent(f_addr.clone().as_str(), f_ue3.as_str(), Some("192.0.0.0/24")).await;
+            onos::add_host_intent(f_addr.clone().as_str(), f_ue4.as_str(), Some("192.0.0.0/24")).await;
+            
+            /*
+            onos::add_host_intent(f_ue1.as_str(), f_ue2.as_str(), None).await;
+            onos::add_host_intent(f_ue2.as_str(), f_ue3.as_str(), None).await;
+            onos::add_host_intent(f_ue2.as_str(), f_ue4.as_str(), None).await;
+            onos::add_host_intent(f_ue3.as_str(), f_ue1.as_str(), None).await;
+            onos::add_host_intent(f_ue3.as_str(), f_ue4.as_str(), None).await;
+            onos::add_host_intent(f_ue4.as_str(), f_ue1.as_str(), None).await;
+            */
+        },
+        None => println!("Upf not up"),
+    }
+    */
+    println!("Done!");
+    //get_hosts().await;
 }

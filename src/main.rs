@@ -42,6 +42,10 @@ struct Args {
     #[arg(short, long)]
     test: bool,
 
+    /// Add new slice to create test case
+    #[arg(short, long)]
+    next: bool,
+
     /// Test Intent
     #[arg(short, long)]
     intent: Option<String>,
@@ -241,6 +245,8 @@ fn main() {
         rt.block_on(demo::start_demo());
     } else if args.test {
         rt.block_on(demo::test());
+    } else if args.next {
+        rt.block_on(demo::situation());
     } else if let Some(device) = args.intent {
         rt.block_on(onos::add_flow(device))
     } else if let Some(sub) = args.addsub {

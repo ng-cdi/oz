@@ -1,8 +1,18 @@
-use reqwest::header::HeaderMap;
-use std::collections::HashMap;
-use serde_yaml::Value;
+use serde_json::{Map, Value};
+//use serde_yaml::Value;
 
 pub async fn get_hosts() {
+    let client = reqwest::Client::new();
+
+    let req = client.get("http://127.0.0.1:8181/onos/v1/hosts")
+                    .basic_auth("onos", Some("rocks"))
+                    .send()
+                    .await.unwrap();
+    let json: Value = req.json().await.unwrap();
+    println!("{:?}", json);
+}
+
+pub async fn get_host(mac_addr: String) {
     let client = reqwest::Client::new();
 
     let req = client.get("http://127.0.0.1:8181/onos/v1/hosts")
@@ -76,7 +86,7 @@ pub async fn get_switch_id(switch_name: &str) -> Option<String> {
                     .await.unwrap();
     let devices: Value = req.json().await.unwrap();
     
-    for i in devices["devices"].as_sequence().unwrap() {
+    for i in devices["devices"].as_array().unwrap() {
         let id = i["id"].as_str().unwrap();
         match get_switch_name(id).await {
             Some(i) => {
@@ -99,7 +109,7 @@ pub async fn get_switch_name(device_id: &str) -> Option<String> {
                     .send()
                     .await.unwrap();
     let devices: Value = req.json().await.unwrap();
-    for i in devices["ports"].as_sequence().unwrap() {
+    for i in devices["ports"].as_array().unwrap() {
         if let Value::String(p_type) = &i["port"] {
             if *p_type == "local".to_string() {
                 return Some(i["annotations"]["portName"].as_str().unwrap().to_string());
@@ -109,19 +119,47 @@ pub async fn get_switch_name(device_id: &str) -> Option<String> {
     return None
 }
 
-pub async fn get_host_id() {
+pub async fn add_host_intent(host_one: &str, host_two: &str, subnet: Option<&str>) {
+    let client = reqwest::Client::new();
+    let mut map = Map::new();
+    //let mut map: Vec<(&str, Value)> = Vec::new();
+    map.insert("type".to_string(), Value::String("HostToHostIntent".to_string()));
+    map.insert("appId".to_string(), Value::String("org.onosproject.cli".to_string()));
+    map.insert("priority".to_string(), Value::Number(55.into()));
+    map.insert("one".to_string(), Value::String(host_one.to_string()));
+    map.insert("two".to_string(), Value::String(host_two.to_string()));
+    if let Some(sub) = subnet {
+        map.insert("ipSrc".to_string(), Value::String(sub.to_string()));
+        map.insert("ipDst".to_string(), Value::String(sub.to_string()));
+    }
 
+    //let m: Value = serde_json::from_str(&map).unwrap();
+    let req = client.post("http://127.0.0.1:8181/onos/v1/intents")
+                    .basic_auth("onos", Some("rocks"))
+                    .json(&map)
+                    .send()
+                    .await.unwrap();
+    match req.status().is_success() {
+        false => {
+            println!("{}", req.text().await.unwrap());
+        }
+        true => return
+    }
+    //let json: Value = req.json().await.unwrap();
+    //println!("{:?}", json);
 }
 
-pub async fn add_host_intent(host_one: &str, host_two: &str) {
+// Use tuple with id and ip address for each node.
+/*
+pub async fn add_slice(upf: String, endpoints: Vec<(String, String)>) {
     let client = reqwest::Client::new();
     let map = format!(r#"
     {{
         "type": "HostToHostIntent",
-        "appId": "org.onosproject/ovsdb",
+        "appId": "org.onosproject.cli",
         "priority": 55,
         "one": "{host_one}",
-        "two": "{host_two}",
+        "two": "{host_two}"
     }}"#);
 
     let m: Value = serde_json::from_str(&map).unwrap();
@@ -130,4 +168,46 @@ pub async fn add_host_intent(host_one: &str, host_two: &str) {
                     .json(&m)
                     .send()
                     .await.unwrap();
+    //let json: Value = req.json().await.unwrap();
+    //println!("{:?}", json);
+}
+*/
+
+pub async fn list_intents() -> Vec<(String, String)> {
+    let client = reqwest::Client::new();
+
+    let req = client.get("http://127.0.0.1:8181/onos/v1/intents")
+                    .basic_auth("onos", Some("rocks"))
+                    .send()
+                    .await.unwrap();
+
+    let json: Value = req.json().await.unwrap();
+    let intent_seq = json["intents"].as_array().unwrap();
+
+    let mut results: Vec<(String, String)> = Vec::new();
+    for i in intent_seq {
+        let app_id = i["appId"].as_str().unwrap();
+        let key = i["key"].as_str().unwrap();
+        results.push((app_id.to_string(), key.to_string()));
+    }
+
+    results
+}
+
+pub async fn flush_intent(app_id: String, key: String) -> bool {
+    let client = reqwest::Client::new();
+    let url = format!("http://127.0.0.1:8181/onos/v1/intents/{}/{}", app_id, key);
+    let req = client.delete(url)
+                    .basic_auth("onos", Some("rocks"))
+                    .send()
+                    .await.unwrap();
+
+    return req.status().is_success()
+}
+
+pub async fn flush_intents() {
+    let intents = list_intents().await;
+    for i in intents {
+        flush_intent(i.0, i.1).await;
+    }
 }
